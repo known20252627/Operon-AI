@@ -12,6 +12,8 @@ import { useAITimeline } from "@/hooks/useAITimeline";
 import { Modal } from "@/components/ui/Modal";
 import { autoLearnProductsFromQuoteItems } from "@/services/inventory";
 import { addQuotation } from "@/services/quotations";
+import { getBrandSettings } from "@/services/brand";
+import { ExportDesignModal } from "@/components/quotation/ExportDesignModal";
 import type { Quotation } from "@/types";
 
 interface WorkspaceModalProps {
@@ -58,6 +60,9 @@ export function WorkspaceModal({
     }
   }, [scannedItems, addItem, onScannedItemsProcessed]);
   
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [currentQuoteId] = useState(() => "QT-2026-" + Math.floor(1000 + Math.random() * 9000));
+
   const { steps, currentIndex, isRunning, isComplete, start } = useAITimeline();
 
   const handleAnalyze = () => {
@@ -65,31 +70,11 @@ export function WorkspaceModal({
   };
 
   const handleDownload = () => {
-    downloadQuotationPdf({
-      brand,
-      items,
-      discount,
-      total,
-      quotationId: "QT-2026-0012",
-      customerName: "Apollo Hospitals",
-      date: new Date().toLocaleDateString("en-IN")
-    });
-    notify("PDF downloaded");
+    setShowExportModal(true);
   };
 
   const handleDownloadExcel = () => {
-    downloadQuotationExcel({
-      brand,
-      company,
-      items,
-      discount,
-      tax,
-      total,
-      quotationId: "QT-2026-0012",
-      customerName: "Apollo Hospitals",
-      date: new Date().toLocaleDateString("en-IN")
-    });
-    notify("Excel downloaded");
+    setShowExportModal(true);
   };
 
   const handleCreateQuote = () => {
@@ -176,6 +161,36 @@ export function WorkspaceModal({
           </div>
         </div>
       </div>
+
+      {showExportModal && (
+        <ExportDesignModal
+          selectedQuotes={[
+            {
+              id: currentQuoteId,
+              customer: "Apollo Hospitals",
+              customerId: "c1",
+              items: items.map((item) => ({ ...item })),
+              discount,
+              subtotal,
+              tax,
+              total,
+              status: "draft",
+              versions: [],
+              currentVersion: 1,
+              createdAt: new Date().toLocaleDateString("en-IN"),
+              updatedAt: new Date().toLocaleDateString("en-IN"),
+              approvalStatus: "draft",
+            },
+          ]}
+          brand={getBrandSettings()}
+          onClose={() => setShowExportModal(false)}
+          onOpenDesignStudio={() => {
+            setShowExportModal(false);
+            onDesign();
+          }}
+          notify={notify}
+        />
+      )}
     </Modal>
   );
 }

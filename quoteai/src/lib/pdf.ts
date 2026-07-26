@@ -52,6 +52,31 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
     pdf.setFontSize(10);
     pdf.setTextColor(105, 99, 120);
     pdf.text("OFFICIAL ESTIMATE / QUOTATION", 130, 18);
+  } else if (brand.templateStyle === "custom_uploaded") {
+    // Elegant Custom Design Banner
+    pdf.setFillColor(brand.accent || "#4f46e5");
+    pdf.rect(0, 0, 210, 32, "F");
+    pdf.setFillColor(20, 20, 30);
+    pdf.rect(0, 30, 210, 3, "F");
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(22);
+    pdf.setFont("helvetica", "bold");
+    pdf.text((brand.name || "Company Name").toUpperCase(), 16, 18);
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    pdf.text("CUSTOM CERTIFIED QUOTATION DESIGN", 16, 26);
+  } else if (brand.templateStyle === "minimal") {
+    pdf.setTextColor(20, 20, 30);
+    pdf.setFontSize(24);
+    pdf.setFont("helvetica", "bold");
+    pdf.text(brand.name || "Company Name", 16, 20);
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(120, 120, 140);
+    pdf.text("COMMERCIAL QUOTATION", 16, 27);
+    pdf.setDrawColor(200, 200, 210);
+    pdf.setLineWidth(0.5);
+    pdf.line(16, 32, 194, 32);
   } else {
     // Default Modern Clean
     pdf.setFillColor(brand.accent || "#3b82f6");
@@ -62,7 +87,7 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
   }
 
   // ── Title ───────────────────────────────────
-  let y = brand.customHeaderImage ? 45 : 46;
+  let y = (brand.customHeaderImage || brand.templateStyle === "custom_uploaded") ? 45 : 46;
   pdf.setTextColor(35, 31, 53);
   pdf.setFontSize(18);
   pdf.text("QUOTATION", 16, y);

@@ -4,7 +4,7 @@
    QuoteAI — Main Page Orchestrator
    ══════════════════════════════════════════════ */
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 
 // Layout
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -73,6 +73,14 @@ export default function Home() {
     setBrandState(b);
     saveBrandSettings(b);
   };
+
+  useEffect(() => {
+    const handleBrandUpdate = () => {
+      setBrandState(getBrandSettings());
+    };
+    window.addEventListener("operon_ai_brand_updated", handleBrandUpdate);
+    return () => window.removeEventListener("operon_ai_brand_updated", handleBrandUpdate);
+  }, []);
 
   // ── Hooks ───────────────────────────────────
   const { toast, notify, clearToast } = useToast();

@@ -39,17 +39,40 @@ export function downloadQuotationExcel(payload: ExcelPayload): void {
           row && row.some((cell: any) => {
             if (typeof cell !== "string") return false;
             const upper = cell.toUpperCase();
-            return upper.includes("PRODUCT") || upper.includes("ITEM") || upper.includes("DESCRIPTION") || upper.includes("SKU") || upper.includes("PARTICULARS") || upper.includes("NAME");
+            return upper.includes("PRODUCT") || upper.includes("ITEM") || upper.includes("DESCRIPTION") || upper.includes("SKU") || upper.includes("PARTICULARS") || upper.includes("NAME") || upper.includes("SR") || upper.includes("SL") || upper.includes("QTY") || upper.includes("QUANTITY") || upper.includes("RATE") || upper.includes("PRICE") || upper.includes("AMOUNT") || upper.includes("SPECIFICATION") || upper.includes("EQUIPMENT") || upper.includes("MODEL") || upper.includes("COST");
           })
         );
 
         if (headerRowIndex === -1) {
           headerRowIndex = Math.min(existingRows.length, 5);
-          existingRows[headerRowIndex] = ["PRODUCT / DESCRIPTION", "SKU", "QTY", "RATE (₹)", "GST %", "AMOUNT (₹)"];
+          while (existingRows.length < headerRowIndex) existingRows.push([]);
+          existingRows.splice(headerRowIndex, 0, ["SR NO", "PRODUCT / DESCRIPTION", "SKU", "QTY", "RATE (₹)", "GST %", "AMOUNT (₹)"]);
         }
 
         const topRows: any[][] = existingRows.slice(0, headerRowIndex + 1);
         const bottomRows: any[][] = existingRows.slice(headerRowIndex + 1);
+
+        // Map column indices from header row
+        const headerRow = existingRows[headerRowIndex] || [];
+        const colMap = { sr: -1, desc: -1, sku: -1, qty: -1, rate: -1, gst: -1, amount: -1 };
+        headerRow.forEach((cell: any, idx: number) => {
+          if (typeof cell !== "string") return;
+          const u = cell.toUpperCase();
+          if (u.includes("SR") || u.includes("SL") || u.includes("S.NO") || u.includes("S NO") || u.includes("NO.")) colMap.sr = idx;
+          else if (u.includes("DESC") || u.includes("PROD") || u.includes("ITEM") || u.includes("PARTICULAR") || u.includes("NAME") || u.includes("SPEC") || u.includes("EQUIP")) colMap.desc = idx;
+          else if (u.includes("SKU") || u.includes("MODEL") || u.includes("CODE") || u.includes("PART")) colMap.sku = idx;
+          else if (u.includes("QTY") || u.includes("QUANT")) colMap.qty = idx;
+          else if (u.includes("RATE") || u.includes("PRICE") || u.includes("COST")) colMap.rate = idx;
+          else if (u.includes("GST") || u.includes("TAX")) colMap.gst = idx;
+          else if (u.includes("AMOUNT") || u.includes("TOTAL") || u.includes("VALUE") || u.includes("NET")) colMap.amount = idx;
+        });
+
+        if (colMap.desc === -1) colMap.desc = colMap.sr !== -1 ? 1 : 0;
+        if (colMap.sku === -1) colMap.sku = colMap.desc + 1;
+        if (colMap.qty === -1) colMap.qty = colMap.sku + 1;
+        if (colMap.rate === -1) colMap.rate = colMap.qty + 1;
+        if (colMap.gst === -1) colMap.gst = colMap.rate + 1;
+        if (colMap.amount === -1) colMap.amount = colMap.gst + 1;
 
         // Find where the template's footer / signature / totals start in bottomRows
         let footerStartIndex = bottomRows.findIndex((row) =>
@@ -62,42 +85,54 @@ export function downloadQuotationExcel(payload: ExcelPayload): void {
 
         const newRows: any[][] = [...topRows];
 
-        // Inject Quotation Line Items
-        items.forEach((item) => {
-          newRows.push([
-            item.product,
-            item.sku,
-            item.qty,
-            item.rate,
-            `${item.gst}%`,
-            item.qty * item.rate,
-          ]);
+        // Inject Quotation Line Items into exact mapped columns
+        items.forEach((item, idx) => {
+          const rowArr: any[] = [];
+          if (colMap.sr !== -1) rowArr[colMap.sr] = idx + 1;
+          rowArr[colMap.desc] = item.product;
+          rowArr[colMap.sku] = item.sku;
+          rowArr[colMap.qty] = item.qty;
+          rowArr[colMap.rate] = item.rate;
+          rowArr[colMap.gst] = `${item.gst}%`;
+          rowArr[colMap.amount] = item.qty * item.rate;
+          for (let c = 0; c < rowArr.length; c++) {
+            if (rowArr[c] === undefined) rowArr[c] = "";
+          }
+          newRows.push(rowArr);
         });
 
         newRows.push([]);
 
+        const labelCol = Math.max(0, colMap.amount - 1);
+        const valCol = colMap.amount;
+        const createTotalRow = (label: string, val: any) => {
+          const r: any[] = [];
+          r[labelCol] = label;
+          r[valCol] = val;
+          for (let c = 0; c <= valCol; c++) if (r[c] === undefined) r[c] = "";
+          return r;
+        };
+
         // If template has its own footer/signature block below the table, preserve it!
         if (footerStartIndex !== -1) {
           const preservedFooter = bottomRows.slice(footerStartIndex);
-          // Insert our totals right above their preserved footer
-          newRows.push(["", "", "", "", "Subtotal:", subtotal]);
+          newRows.push(createTotalRow("Subtotal:", subtotal));
           if (discount > 0) {
             const discountVal = subtotal * (discount / 100);
-            newRows.push(["", "", "", "", `Discount (${discount}%):`, -discountVal]);
+            newRows.push(createTotalRow(`Discount (${discount}%):`, -discountVal));
           }
-          newRows.push(["", "", "", "", "Tax (GST):", tax]);
-          newRows.push(["", "", "", "", "Total Payable:", total]);
+          newRows.push(createTotalRow("Tax (GST):", tax));
+          newRows.push(createTotalRow("Total Payable:", total));
           newRows.push([]);
           newRows.push(...preservedFooter);
         } else {
-          // Standard totals and terms if no custom footer found
-          newRows.push(["", "", "", "", "Subtotal:", subtotal]);
+          newRows.push(createTotalRow("Subtotal:", subtotal));
           if (discount > 0) {
             const discountVal = subtotal * (discount / 100);
-            newRows.push(["", "", "", "", `Discount (${discount}%):`, -discountVal]);
+            newRows.push(createTotalRow(`Discount (${discount}%):`, -discountVal));
           }
-          newRows.push(["", "", "", "", "Tax (GST):", tax]);
-          newRows.push(["", "", "", "", "Total Payable:", total]);
+          newRows.push(createTotalRow("Tax (GST):", tax));
+          newRows.push(createTotalRow("Total Payable:", total));
           newRows.push([]);
           newRows.push(["Terms & Conditions:"]);
           const termsLines = (brand.terms || "Standard delivery and quotation terms apply.").split("\n");
