@@ -30,6 +30,7 @@ import { AICopilot } from "@/components/ai/AICopilot";
 import { OCRHub } from "@/components/ocr/OCRHub";
 import { autoLearnProductsFromQuoteItems } from "@/services/inventory";
 import { getBrandSettings, saveBrandSettings } from "@/services/brand";
+import { addQuotation } from "@/services/quotations";
 
 // Enterprise Views
 import { CustomerTimeline } from "@/components/customers/CustomerTimeline";
@@ -49,7 +50,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 // Types
-import type { ActiveView, ToolType, BrandSettings, CompanySettings, QuoteItem } from "@/types";
+import type { ActiveView, ToolType, BrandSettings, CompanySettings, QuoteItem, Quotation } from "@/types";
 import { DEFAULT_COMPANY } from "@/lib/constants";
 
 export default function Home() {
@@ -110,10 +111,37 @@ export default function Home() {
   }, []);
 
   const handleScanComplete = useCallback((items: QuoteItem[]) => {
+    const { learnedProducts } = autoLearnProductsFromQuoteItems(items);
+    const newId = `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+    const subtotal = items.reduce((sum, i) => sum + i.qty * i.rate, 0);
+    const tax = items.reduce((sum, i) => sum + (i.qty * i.rate * (i.gst || 12)) / 100, 0);
+    const newQuote: Quotation = {
+      id: newId,
+      customer: "Apollo Hospitals",
+      customerId: "c1",
+      items: items.map((item) => ({ ...item })),
+      discount: 5,
+      subtotal,
+      tax,
+      total: subtotal + tax - subtotal * 0.05,
+      status: "draft",
+      versions: [{ version: 1, changes: [], createdAt: new Date().toISOString(), createdBy: "Abhishek" }],
+      currentVersion: 1,
+      createdAt: new Date().toLocaleDateString("en-IN"),
+      updatedAt: new Date().toLocaleDateString("en-IN"),
+      approvalStatus: "draft",
+    };
+    addQuotation(newQuote);
+
     setPendingScanItems(items);
     setTool(null);
     setShowWorkspace(true);
-  }, []);
+    if (learnedProducts.length > 0) {
+      notify(`🎉 Saved Quote ${newId} to Quotations tab & auto-learned ${learnedProducts.length} new product(s)!`);
+    } else {
+      notify(`🎉 Saved Quote ${newId} to Quotations tab!`);
+    }
+  }, [notify]);
 
   const handleDesignClose = useCallback(() => {
     setTool(null);
@@ -175,12 +203,33 @@ export default function Home() {
           <OCRHub
             onConvertToQuote={(items, customerName, docTitle) => {
               const { learnedProducts } = autoLearnProductsFromQuoteItems(items);
+              const newId = `QT-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+              const subtotal = items.reduce((sum, i) => sum + i.qty * i.rate, 0);
+              const tax = items.reduce((sum, i) => sum + (i.qty * i.rate * (i.gst || 12)) / 100, 0);
+              const newQuote: Quotation = {
+                id: newId,
+                customer: customerName || "Apollo Hospitals",
+                customerId: "c1",
+                items: items.map((item) => ({ ...item })),
+                discount: 5,
+                subtotal,
+                tax,
+                total: subtotal + tax - subtotal * 0.05,
+                status: "draft",
+                versions: [{ version: 1, changes: [], createdAt: new Date().toISOString(), createdBy: "Abhishek" }],
+                currentVersion: 1,
+                createdAt: new Date().toLocaleDateString("en-IN"),
+                updatedAt: new Date().toLocaleDateString("en-IN"),
+                approvalStatus: "draft",
+              };
+              addQuotation(newQuote);
+
               setPendingScanItems(items);
               setShowWorkspace(true);
               if (learnedProducts.length > 0) {
-                notify(`⚡ Converted to quote & auto-learned ${learnedProducts.length} new product(s) into Company Catalog!`);
+                notify(`🎉 Saved Quote ${newId} to Quotations tab & auto-learned ${learnedProducts.length} new product(s)!`);
               } else {
-                notify(`Converted ${items.length} items from ${docTitle || "OCR"} to Quotation`);
+                notify(`🎉 Saved Quote ${newId} to Quotations tab with ${items.length} OCR items!`);
               }
             }}
             notify={notify}

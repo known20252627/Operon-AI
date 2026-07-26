@@ -34,7 +34,7 @@ export interface BrandSettings {
   name: string;
   accent: string;
   terms: string;
-  templateStyle?: "modern" | "classic" | "enterprise" | "custom_uploaded";
+  templateStyle?: "modern" | "classic" | "enterprise" | "minimal" | "custom_uploaded";
   customHeaderImage?: string;
   customFooterImage?: string;
   watermarkText?: string;

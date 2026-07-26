@@ -23,7 +23,6 @@ export function downloadQuotationExcel(payload: ExcelPayload): void {
   // ── Custom Uploaded Excel Template Processing ──
   if (brand.customExcelTemplate) {
     try {
-      // Extract pure base64 from Data URL if present
       const base64Data = brand.customExcelTemplate.includes(",")
         ? brand.customExcelTemplate.split(",")[1]
         : brand.customExcelTemplate;
@@ -33,26 +32,35 @@ export function downloadQuotationExcel(payload: ExcelPayload): void {
       const sheet = customWorkbook.Sheets[firstSheetName];
 
       if (sheet) {
-        // Convert sheet to 2D array
         const existingRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-        // Find the table header row (looking for keywords like PRODUCT, DESCRIPTION, ITEM, SKU)
+        // Find table header row
         let headerRowIndex = existingRows.findIndex((row) =>
           row && row.some((cell: any) => {
             if (typeof cell !== "string") return false;
             const upper = cell.toUpperCase();
-            return upper.includes("PRODUCT") || upper.includes("ITEM") || upper.includes("DESCRIPTION") || upper.includes("SKU");
+            return upper.includes("PRODUCT") || upper.includes("ITEM") || upper.includes("DESCRIPTION") || upper.includes("SKU") || upper.includes("PARTICULARS") || upper.includes("NAME");
           })
         );
 
         if (headerRowIndex === -1) {
-          // If no table header found, append after row 5 or end of existing header
           headerRowIndex = Math.min(existingRows.length, 5);
           existingRows[headerRowIndex] = ["PRODUCT / DESCRIPTION", "SKU", "QTY", "RATE (₹)", "GST %", "AMOUNT (₹)"];
         }
 
-        // Build new rows: keep everything up to and including header row
-        const newRows: any[][] = existingRows.slice(0, headerRowIndex + 1);
+        const topRows: any[][] = existingRows.slice(0, headerRowIndex + 1);
+        const bottomRows: any[][] = existingRows.slice(headerRowIndex + 1);
+
+        // Find where the template's footer / signature / totals start in bottomRows
+        let footerStartIndex = bottomRows.findIndex((row) =>
+          row && row.some((cell: any) => {
+            if (typeof cell !== "string") return false;
+            const upper = cell.toUpperCase();
+            return upper.includes("SUBTOTAL") || upper.includes("TOTAL") || upper.includes("TERMS") || upper.includes("BANK") || upper.includes("SIGN") || upper.includes("FOR ") || upper.includes("CONDITIONS") || upper.includes("NOTE") || upper.includes("AUTHORISED");
+          })
+        );
+
+        const newRows: any[][] = [...topRows];
 
         // Inject Quotation Line Items
         items.forEach((item) => {
@@ -68,21 +76,34 @@ export function downloadQuotationExcel(payload: ExcelPayload): void {
 
         newRows.push([]);
 
-        // Append Totals & Terms
-        newRows.push(["", "", "", "", "Subtotal:", subtotal]);
-        if (discount > 0) {
-          const discountVal = subtotal * (discount / 100);
-          newRows.push(["", "", "", "", `Discount (${discount}%):`, -discountVal]);
+        // If template has its own footer/signature block below the table, preserve it!
+        if (footerStartIndex !== -1) {
+          const preservedFooter = bottomRows.slice(footerStartIndex);
+          // Insert our totals right above their preserved footer
+          newRows.push(["", "", "", "", "Subtotal:", subtotal]);
+          if (discount > 0) {
+            const discountVal = subtotal * (discount / 100);
+            newRows.push(["", "", "", "", `Discount (${discount}%):`, -discountVal]);
+          }
+          newRows.push(["", "", "", "", "Tax (GST):", tax]);
+          newRows.push(["", "", "", "", "Total Payable:", total]);
+          newRows.push([]);
+          newRows.push(...preservedFooter);
+        } else {
+          // Standard totals and terms if no custom footer found
+          newRows.push(["", "", "", "", "Subtotal:", subtotal]);
+          if (discount > 0) {
+            const discountVal = subtotal * (discount / 100);
+            newRows.push(["", "", "", "", `Discount (${discount}%):`, -discountVal]);
+          }
+          newRows.push(["", "", "", "", "Tax (GST):", tax]);
+          newRows.push(["", "", "", "", "Total Payable:", total]);
+          newRows.push([]);
+          newRows.push(["Terms & Conditions:"]);
+          const termsLines = (brand.terms || "Standard delivery and quotation terms apply.").split("\n");
+          termsLines.forEach((line) => newRows.push([line]));
         }
-        newRows.push(["", "", "", "", "Tax (GST):", tax]);
-        newRows.push(["", "", "", "", "Total Payable:", total]);
 
-        newRows.push([]);
-        newRows.push(["Terms & Conditions:"]);
-        const termsLines = (brand.terms || "Standard delivery and quotation terms apply.").split("\n");
-        termsLines.forEach((line) => newRows.push([line]));
-
-        // Create updated worksheet and write
         const updatedSheet = XLSX.utils.aoa_to_sheet(newRows);
         customWorkbook.Sheets[firstSheetName] = updatedSheet;
         XLSX.writeFile(customWorkbook, fileName);
