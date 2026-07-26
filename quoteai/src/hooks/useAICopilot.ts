@@ -34,10 +34,10 @@ function generateResponse(input: string): string {
     return "Freight estimate based on delivery to CityCare Hospital, Mumbai:\n• Standard (7 days): ₹850\n• Express (3 days): ₹1,400\n• Same-day: ₹2,200\n\nWhich option should I add?";
   }
   if (lower.startsWith("/email") || lower.includes("email")) {
-    return '**Draft email generated:**\n\nSubject: Quotation QT-2026-0129 — Medline Systems\n\nDear Priya,\n\nPlease find attached our quotation for the requested medical equipment. The total comes to ₹45,066 inclusive of GST, with a 5% hospital discount applied.\n\nKey highlights:\n• All items in stock — ready for dispatch\n• Delivery within 7 working days\n• Prices valid for 15 days\n\nPlease let me know if you need any adjustments.\n\nBest regards,\nPratik Shah\nMedline Systems';
+    return '**Draft email generated:**\n\nSubject: Quotation QT-2026-0129 — Medline Systems\n\nDear Priya,\n\nPlease find attached our quotation for the requested medical equipment. The total comes to ₹45,066 inclusive of GST, with a 5% hospital discount applied.\n\nKey highlights:\n• All items in stock — ready for dispatch\n• Delivery within 7 working days\n• Prices valid for 15 days\n\nPlease let me know if you need any adjustments.\n\nBest regards,\nAbhishek Jha\nMedline Systems';
   }
   if (lower.startsWith("/whatsapp") || lower.includes("whatsapp")) {
-    return "**WhatsApp message draft:**\n\nHi Priya 👋\n\nSharing the quotation for your recent request — QT-2026-0129.\n\n📋 3 items | ₹45,066 incl. GST\n🏷️ 5% hospital discount applied\n📦 All items in stock\n\nI've attached the PDF. Let me know if any changes are needed!\n\n— Pratik, Medline Systems";
+    return "**WhatsApp message draft:**\n\nHi Priya 👋\n\nSharing the quotation for your recent request — QT-2026-0129.\n\n📋 3 items | ₹45,066 incl. GST\n🏷️ 5% hospital discount applied\n📦 All items in stock\n\nI've attached the PDF. Let me know if any changes are needed!\n\n— Abhishek, Medline Systems";
   }
   if (lower.startsWith("/explain") || lower.includes("explain")) {
     return "**Quotation Breakdown:**\n\n| Item | Qty | Rate | Amount |\n|---|---|---|---|\n| BP Monitor | 12 | ₹1,850 | ₹22,200 |\n| Pulse Oximeter | 8 | ₹1,240 | ₹9,920 |\n| IR Thermometer | 15 | ₹890 | ₹13,350 |\n\nSubtotal: ₹45,470\nDiscount (5%): -₹2,274\nGST: ₹1,870\n**Total: ₹45,066**\n\nEstimated margin: 19.2% (₹8,653)";

@@ -111,7 +111,7 @@ export const QUOTATIONS: Quotation[] = [
   {
     id: "QT-2026-0127", customer: "Sapphire Hospitals", customerId: "c1",
     items: [INITIAL_QUOTE_ITEMS[0], INITIAL_QUOTE_ITEMS[2]], discount: 8, subtotal: 124800, tax: 13104, total: 124800,
-    status: "viewed", versions: [{ version: 1, changes: [], createdAt: "2026-07-23T14:30:00", createdBy: "Pratik" }, { version: 2, changes: [{ field: "discount", oldValue: "5%", newValue: "8%" }], createdAt: "2026-07-23T16:00:00", createdBy: "AI" }],
+    status: "viewed", versions: [{ version: 1, changes: [], createdAt: "2026-07-23T14:30:00", createdBy: "Abhishek" }, { version: 2, changes: [{ field: "discount", oldValue: "5%", newValue: "8%" }], createdAt: "2026-07-23T16:00:00", createdBy: "AI" }],
     currentVersion: 2, createdAt: "2026-07-23T14:30:00", updatedAt: "2026-07-23T16:00:00", approvalStatus: "approved",
   },
   {

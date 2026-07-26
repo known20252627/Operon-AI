@@ -42,8 +42,8 @@ export function Sidebar({ active, onNavigate, onSettings, onToggleCopilot }: Sid
           <i>⚙</i>Settings
         </button>
         <button className="profile">
-          <span>PS</span>
-          <b>Pratik Shah<small>Admin</small></b>
+          <span>AJ</span>
+          <b>Abhishek Jha<small>Admin</small></b>
           <i>⋮</i>
         </button>
       </div>

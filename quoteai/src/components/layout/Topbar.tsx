@@ -25,7 +25,7 @@ export function Topbar({
     <header className="topbar">
       <div>
         <p className="eyebrow">{getDateString()}</p>
-        <h1>{active === "Overview" ? getGreeting() + ", Pratik" : active}</h1>
+        <h1>{active === "Overview" ? getGreeting() + ", Abhishek" : active}</h1>
       </div>
       <div className="top-actions">
         <button className="icon-button" onClick={onSearch}>⌕</button>
