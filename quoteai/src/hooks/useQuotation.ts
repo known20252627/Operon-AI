@@ -49,6 +49,10 @@ export function useQuotation(initial: QuoteItem[] = INITIAL_QUOTE_ITEMS) {
     setItems((prev) => [...prev, item]);
   }, []);
 
+  const replaceItems = useCallback((newItems: QuoteItem[]) => {
+    setItems(newItems);
+  }, []);
+
   const removeItem = useCallback((id: number) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
   }, []);
@@ -81,6 +85,7 @@ export function useQuotation(initial: QuoteItem[] = INITIAL_QUOTE_ITEMS) {
     updateQty,
     updateRate,
     addItem,
+    replaceItems,
     removeItem,
     updateItem,
     incrementDiscount,

@@ -48,20 +48,24 @@ export function WorkspaceModal({
     updateQty,
     updateRate,
     addItem,
+    replaceItems,
     incrementDiscount,
     decrementDiscount,
   } = useQuotation();
   
-  // Merge newly scanned items into the quotation
+  // Replace items with newly scanned items from OCR
   useEffect(() => {
     if (scannedItems && scannedItems.length > 0) {
-      scannedItems.forEach(item => addItem(item));
+      replaceItems(scannedItems);
       if (onScannedItemsProcessed) onScannedItemsProcessed();
     }
-  }, [scannedItems, addItem, onScannedItemsProcessed]);
+  }, [scannedItems, replaceItems, onScannedItemsProcessed]);
   
   const [showExportModal, setShowExportModal] = useState(false);
-  const [currentQuoteId] = useState(() => "QT-2026-" + Math.floor(1000 + Math.random() * 9000));
+  const [currentQuoteId, setCurrentQuoteId] = useState("QT-2026-0001");
+  useEffect(() => {
+    setCurrentQuoteId("QT-2026-" + Math.floor(1000 + Math.random() * 9000));
+  }, []);
 
   const { steps, currentIndex, isRunning, isComplete, start } = useAITimeline();
 

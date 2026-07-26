@@ -5,7 +5,7 @@ import { getCompanyProducts, addCompanyProduct, deleteCompanyProduct, updateComp
 import type { Product } from '@/types';
 
 export function ProductsView() {
-  const [productsList, setProductsList] = useState<Product[]>(() => getCompanyProducts());
+  const [productsList, setProductsList] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -28,6 +28,7 @@ export function ProductsView() {
   };
 
   useEffect(() => {
+    setProductsList(getCompanyProducts());
     const handleUpdate = () => {
       setProductsList(getCompanyProducts());
     };

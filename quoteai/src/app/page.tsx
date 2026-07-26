@@ -51,7 +51,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 // Types
 import type { ActiveView, ToolType, BrandSettings, CompanySettings, QuoteItem, Quotation } from "@/types";
-import { DEFAULT_COMPANY } from "@/lib/constants";
+import { DEFAULT_COMPANY, DEFAULT_BRAND } from "@/lib/constants";
 
 export default function Home() {
   // ── Navigation ──────────────────────────────
@@ -66,7 +66,7 @@ export default function Home() {
   const [pendingScanItems, setPendingScanItems] = useState<QuoteItem[] | null>(null);
 
   // ── Brand & Company Settings ────────────────
-  const [brand, setBrandState] = useState<BrandSettings>(() => getBrandSettings());
+  const [brand, setBrandState] = useState<BrandSettings>(DEFAULT_BRAND);
   const [company, setCompany] = useState<CompanySettings>(DEFAULT_COMPANY);
 
   const setBrand = (b: BrandSettings) => {
@@ -75,6 +75,7 @@ export default function Home() {
   };
 
   useEffect(() => {
+    setBrandState(getBrandSettings());
     const handleBrandUpdate = () => {
       setBrandState(getBrandSettings());
     };

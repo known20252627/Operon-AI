@@ -18,13 +18,14 @@ interface QuotationsViewProps {
 
 export function QuotationsView({ onOpenDesign, onNewQuote }: QuotationsViewProps) {
   const [activeTab, setActiveTab] = useState("All");
-  const [quotesList, setQuotesList] = useState<Quotation[]>(() => getQuotations());
+  const [quotesList, setQuotesList] = useState<Quotation[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportTargetQuotes, setExportTargetQuotes] = useState<Quotation[]>([]);
   const { notify } = useToast();
 
   useEffect(() => {
+    setQuotesList(getQuotations());
     const handleUpdate = () => {
       setQuotesList(getQuotations());
     };

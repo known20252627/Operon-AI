@@ -11,10 +11,11 @@ import { useToast } from "@/hooks/useToast";
 import type { Quotation } from "@/types";
 
 export function RecentQuotations() {
-  const [quotesList, setQuotesList] = useState<Quotation[]>(() => getQuotations().slice(0, 5));
+  const [quotesList, setQuotesList] = useState<Quotation[]>([]);
   const { notify } = useToast();
 
   useEffect(() => {
+    setQuotesList(getQuotations().slice(0, 5));
     const handleUpdate = () => {
       setQuotesList(getQuotations().slice(0, 5));
     };
