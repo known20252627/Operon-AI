@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import type { BrandSettings } from "@/types";
 import { ToolModal } from "@/components/ui/Modal";
 import { saveBrandSettings } from "@/services/brand";
+import { analyzeExcelTemplate } from "@/services/excelAnalyzer";
 
 interface DesignModalProps {
   brand: BrandSettings;
@@ -62,14 +63,27 @@ export function DesignModal({
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       if (typeof reader.result === "string") {
-        setLocalBrand((prev) => ({
-          ...prev,
-          customExcelTemplate: reader.result as string,
-          customExcelTemplateName: file.name,
-        }));
-        notify(`📊 Successfully uploaded Excel Template: "${file.name}"!`);
+        const base64Str = reader.result;
+        try {
+          const mapping = await analyzeExcelTemplate(base64Str);
+          setLocalBrand((prev) => ({
+            ...prev,
+            customExcelTemplate: base64Str,
+            customExcelTemplateName: file.name,
+            customExcelMapping: mapping,
+          }));
+          notify(`📊 Analyzed template "${file.name}"! Found table header at row ${mapping.headerRowIndex}.`);
+        } catch (err: any) {
+          console.error("Failed to analyze Excel template:", err);
+          setLocalBrand((prev) => ({
+            ...prev,
+            customExcelTemplate: base64Str,
+            customExcelTemplateName: file.name,
+          }));
+          notify(`⚠️ Uploaded template, but analysis had a warning: ${err.message || "Unknown structure"}`);
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -80,8 +94,9 @@ export function DesignModal({
       ...prev,
       customExcelTemplate: undefined,
       customExcelTemplateName: undefined,
+      customExcelMapping: undefined,
     }));
-    notify("🗑️ Removed uploaded Excel template.");
+    notify("🗑️ Removed uploaded Excel template and structure mapping.");
   };
 
   const templateStyles = [
@@ -321,18 +336,33 @@ export function DesignModal({
                 </div>
 
                 {localBrand.customExcelTemplate ? (
-                  <div className="border border-green-300 dark:border-green-800 rounded-xl p-3 bg-green-50 dark:bg-green-950/30 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <span className="text-2xl">📑</span>
-                      <div className="min-w-0">
-                        <div className="font-bold text-xs text-green-900 dark:text-green-200 truncate">
-                          {localBrand.customExcelTemplateName || "Custom_Quotation_Template.xlsx"}
-                        </div>
-                        <div className="text-[10px] text-green-700 dark:text-green-400">
-                          ✓ Ready for automated Excel quotation generation
+                  <div className="border border-green-300 dark:border-green-800 rounded-xl p-3 bg-green-50 dark:bg-green-950/30 space-y-2.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-2xl">📑</span>
+                        <div className="min-w-0">
+                          <div className="font-bold text-xs text-green-900 dark:text-green-200 truncate">
+                            {localBrand.customExcelTemplateName || "Custom_Quotation_Template.xlsx"}
+                          </div>
+                          <div className="text-[10px] text-green-700 dark:text-green-400">
+                            ✓ Ready for automated Excel quotation generation
+                          </div>
                         </div>
                       </div>
                     </div>
+                    {localBrand.customExcelMapping && (
+                      <div className="pt-2 border-t border-green-200 dark:border-green-800/60 text-[11px] text-green-800 dark:text-green-300 grid grid-cols-2 gap-1.5 bg-white/60 dark:bg-black/20 p-2.5 rounded-lg">
+                        <div>📌 <strong>Header Row:</strong> Row #{localBrand.customExcelMapping.headerRowIndex}</div>
+                        <div>📦 <strong>Product Col:</strong> Col #{localBrand.customExcelMapping.columns.product}</div>
+                        <div>🔢 <strong>Qty Col:</strong> Col #{localBrand.customExcelMapping.columns.qty}</div>
+                        <div>💰 <strong>Rate Col:</strong> Col #{localBrand.customExcelMapping.columns.rate}</div>
+                        <div>🧮 <strong>Amount Col:</strong> Col #{localBrand.customExcelMapping.columns.amount}</div>
+                        <div>📈 <strong>Total Row:</strong> Row #{localBrand.customExcelMapping.totals.totalRowIndex || "Auto"}</div>
+                        <div className="col-span-2 text-[10px] text-green-700 dark:text-green-400 mt-1 font-semibold">
+                          ✨ All merged cells, colors, formulas, borders, and logos will be 100% preserved!
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <label className="border-2 border-dashed border-green-300 dark:border-green-800/60 hover:border-green-500 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer bg-green-50/50 dark:bg-green-950/10 transition-colors">

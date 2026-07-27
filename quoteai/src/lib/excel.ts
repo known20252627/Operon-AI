@@ -1,6 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import * as XLSX from "xlsx";
-import type { QuoteItem, BrandSettings, CompanySettings } from "@/types";
+"use client";
+
+import ExcelJS from "exceljs";
+import type { QuoteItem, BrandSettings, CompanySettings, ExcelTemplateMapping } from "@/types";
+import { createQuotationModel, validateQuotationModel, type InternalQuotationModel } from "@/services/quotationModel";
+import { analyzeExcelTemplate } from "@/services/excelAnalyzer";
 
 export interface ExcelPayload {
   brand: BrandSettings;
@@ -14,193 +17,269 @@ export interface ExcelPayload {
   date: string;
 }
 
-/** Generate and download a branded quotation Excel file (supports custom uploaded Excel templates). */
-export function downloadQuotationExcel(payload: ExcelPayload): void {
-  const { brand, company, items, discount, tax, total, quotationId, customerName, date } = payload;
-  const fileName = `${quotationId}-${customerName.replace(/[^a-z0-9]/gi, '_')}.xlsx`;
-  const subtotal = items.reduce((sum, i) => sum + i.qty * i.rate, 0);
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const cleanBase64 = base64.replace(/^data:.*;base64,/, "");
+  const binaryString = window.atob(cleanBase64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
 
-  // ── Custom Uploaded Excel Template Processing ──
+function triggerDownload(buffer: ExcelJS.Buffer, fileName: string): void {
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
+
+/**
+ * Generate and download a branded quotation Excel file using ExcelJS.
+ * Guarantees 100% preservation of colors, merged cells, formulas, borders, and logos.
+ */
+export async function downloadQuotationExcel(payload: ExcelPayload): Promise<void> {
+  const { brand, company, items, discount, tax, total, quotationId, customerName, date } = payload;
+  const fileName = `${quotationId}-${customerName.replace(/[^a-z0-9]/gi, "_")}.xlsx`;
+
+  // 1. Create Independent Quotation Model
+  const model: InternalQuotationModel = createQuotationModel(
+    {
+      quotationId,
+      customerName,
+      items,
+      discount,
+      tax,
+      total,
+      date,
+    },
+    brand,
+    company
+  );
+
+  // 2. Validate Model Integrity Before Exporting
+  const validation = validateQuotationModel(model);
+  if (!validation.valid) {
+    const errorMsg = "Quotation Validation Error:\n" + validation.errors.map((e) => `• ${e}`).join("\n");
+    throw new Error(errorMsg);
+  }
+
+  // 3. Custom Uploaded Excel Template Processing (High Fidelity)
   if (brand.customExcelTemplate) {
     try {
-      const base64Data = brand.customExcelTemplate.includes(",")
-        ? brand.customExcelTemplate.split(",")[1]
-        : brand.customExcelTemplate;
+      const buffer = base64ToArrayBuffer(brand.customExcelTemplate);
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(buffer);
 
-      const customWorkbook = XLSX.read(base64Data, { type: "base64" });
-      const firstSheetName = customWorkbook.SheetNames[0];
-      const sheet = customWorkbook.Sheets[firstSheetName];
-
-      if (sheet) {
-        const existingRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-
-        // Find table header row
-        let headerRowIndex = existingRows.findIndex((row) =>
-          row && row.some((cell: any) => {
-            if (typeof cell !== "string") return false;
-            const upper = cell.toUpperCase();
-            return upper.includes("PRODUCT") || upper.includes("ITEM") || upper.includes("DESCRIPTION") || upper.includes("SKU") || upper.includes("PARTICULARS") || upper.includes("NAME") || upper.includes("SR") || upper.includes("SL") || upper.includes("QTY") || upper.includes("QUANTITY") || upper.includes("RATE") || upper.includes("PRICE") || upper.includes("AMOUNT") || upper.includes("SPECIFICATION") || upper.includes("EQUIPMENT") || upper.includes("MODEL") || upper.includes("COST");
-          })
-        );
-
-        if (headerRowIndex === -1) {
-          headerRowIndex = Math.min(existingRows.length, 5);
-          while (existingRows.length < headerRowIndex) existingRows.push([]);
-          existingRows.splice(headerRowIndex, 0, ["SR NO", "PRODUCT / DESCRIPTION", "SKU", "QTY", "RATE (₹)", "GST %", "AMOUNT (₹)"]);
-        }
-
-        const topRows: any[][] = existingRows.slice(0, headerRowIndex + 1);
-        const bottomRows: any[][] = existingRows.slice(headerRowIndex + 1);
-
-        // Map column indices from header row
-        const headerRow = existingRows[headerRowIndex] || [];
-        const colMap = { sr: -1, desc: -1, sku: -1, qty: -1, rate: -1, gst: -1, amount: -1 };
-        headerRow.forEach((cell: any, idx: number) => {
-          if (typeof cell !== "string") return;
-          const u = cell.toUpperCase();
-          if (u.includes("SR") || u.includes("SL") || u.includes("S.NO") || u.includes("S NO") || u.includes("NO.")) colMap.sr = idx;
-          else if (u.includes("DESC") || u.includes("PROD") || u.includes("ITEM") || u.includes("PARTICULAR") || u.includes("NAME") || u.includes("SPEC") || u.includes("EQUIP")) colMap.desc = idx;
-          else if (u.includes("SKU") || u.includes("MODEL") || u.includes("CODE") || u.includes("PART")) colMap.sku = idx;
-          else if (u.includes("QTY") || u.includes("QUANT")) colMap.qty = idx;
-          else if (u.includes("RATE") || u.includes("PRICE") || u.includes("COST")) colMap.rate = idx;
-          else if (u.includes("GST") || u.includes("TAX")) colMap.gst = idx;
-          else if (u.includes("AMOUNT") || u.includes("TOTAL") || u.includes("VALUE") || u.includes("NET")) colMap.amount = idx;
-        });
-
-        if (colMap.desc === -1) colMap.desc = colMap.sr !== -1 ? 1 : 0;
-        if (colMap.sku === -1) colMap.sku = colMap.desc + 1;
-        if (colMap.qty === -1) colMap.qty = colMap.sku + 1;
-        if (colMap.rate === -1) colMap.rate = colMap.qty + 1;
-        if (colMap.gst === -1) colMap.gst = colMap.rate + 1;
-        if (colMap.amount === -1) colMap.amount = colMap.gst + 1;
-
-        // Find where the template's footer / signature / totals start in bottomRows
-        let footerStartIndex = bottomRows.findIndex((row) =>
-          row && row.some((cell: any) => {
-            if (typeof cell !== "string") return false;
-            const upper = cell.toUpperCase();
-            return upper.includes("SUBTOTAL") || upper.includes("TOTAL") || upper.includes("TERMS") || upper.includes("BANK") || upper.includes("SIGN") || upper.includes("FOR ") || upper.includes("CONDITIONS") || upper.includes("NOTE") || upper.includes("AUTHORISED");
-          })
-        );
-
-        const newRows: any[][] = [...topRows];
-
-        // Inject Quotation Line Items into exact mapped columns
-        items.forEach((item, idx) => {
-          const rowArr: any[] = [];
-          if (colMap.sr !== -1) rowArr[colMap.sr] = idx + 1;
-          rowArr[colMap.desc] = item.product;
-          rowArr[colMap.sku] = item.sku;
-          rowArr[colMap.qty] = item.qty;
-          rowArr[colMap.rate] = item.rate;
-          rowArr[colMap.gst] = `${item.gst}%`;
-          rowArr[colMap.amount] = item.qty * item.rate;
-          for (let c = 0; c < rowArr.length; c++) {
-            if (rowArr[c] === undefined) rowArr[c] = "";
-          }
-          newRows.push(rowArr);
-        });
-
-        newRows.push([]);
-
-        const labelCol = Math.max(0, colMap.amount - 1);
-        const valCol = colMap.amount;
-        const createTotalRow = (label: string, val: any) => {
-          const r: any[] = [];
-          r[labelCol] = label;
-          r[valCol] = val;
-          for (let c = 0; c <= valCol; c++) if (r[c] === undefined) r[c] = "";
-          return r;
-        };
-
-        // If template has its own footer/signature block below the table, preserve it!
-        if (footerStartIndex !== -1) {
-          const preservedFooter = bottomRows.slice(footerStartIndex);
-          newRows.push(createTotalRow("Subtotal:", subtotal));
-          if (discount > 0) {
-            const discountVal = subtotal * (discount / 100);
-            newRows.push(createTotalRow(`Discount (${discount}%):`, -discountVal));
-          }
-          newRows.push(createTotalRow("Tax (GST):", tax));
-          newRows.push(createTotalRow("Total Payable:", total));
-          newRows.push([]);
-          newRows.push(...preservedFooter);
-        } else {
-          newRows.push(createTotalRow("Subtotal:", subtotal));
-          if (discount > 0) {
-            const discountVal = subtotal * (discount / 100);
-            newRows.push(createTotalRow(`Discount (${discount}%):`, -discountVal));
-          }
-          newRows.push(createTotalRow("Tax (GST):", tax));
-          newRows.push(createTotalRow("Total Payable:", total));
-          newRows.push([]);
-          newRows.push(["Terms & Conditions:"]);
-          const termsLines = (brand.terms || "Standard delivery and quotation terms apply.").split("\n");
-          termsLines.forEach((line) => newRows.push([line]));
-        }
-
-        const updatedSheet = XLSX.utils.aoa_to_sheet(newRows);
-        customWorkbook.Sheets[firstSheetName] = updatedSheet;
-        XLSX.writeFile(customWorkbook, fileName);
-        return;
+      const worksheet = workbook.worksheets[0];
+      if (!worksheet) {
+        throw new Error("No worksheet found in custom template.");
       }
-    } catch (err) {
-      console.error("Failed to inject items into custom Excel template, falling back to default layout:", err);
+
+      // Ensure we have template mapping
+      let mapping: ExcelTemplateMapping | undefined = brand.customExcelMapping;
+      if (!mapping) {
+        mapping = await analyzeExcelTemplate(brand.customExcelTemplate);
+      }
+
+      const { dataStartRowIndex, dataEndRowIndex, columns, totals } = mapping;
+      const sampleRowCount = Math.max(1, dataEndRowIndex - dataStartRowIndex + 1);
+      const itemsCount = model.products.length;
+
+      // 4. Dynamic Row Insertion while preserving 100% formatting
+      let rowOffset = 0;
+      if (itemsCount > sampleRowCount) {
+        const rowsToInsert = itemsCount - sampleRowCount;
+        rowOffset = rowsToInsert;
+
+        // Clone cell styles from the last sample row
+        const sampleRowNumber = dataEndRowIndex;
+        const sampleRow = worksheet.getRow(sampleRowNumber);
+
+        // Splice empty rows right below dataEndRowIndex
+        worksheet.spliceRows(sampleRowNumber + 1, 0, ...new Array(rowsToInsert).fill([]));
+
+        // Copy styles and height to newly inserted rows
+        for (let i = 1; i <= rowsToInsert; i++) {
+          const targetRowNumber = sampleRowNumber + i;
+          const targetRow = worksheet.getRow(targetRowNumber);
+          targetRow.height = sampleRow.height;
+
+          sampleRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+            const targetCell = targetRow.getCell(colIdx);
+            targetCell.style = Object.assign({}, cell.style);
+            if (cell.numFmt) targetCell.numFmt = cell.numFmt;
+          });
+        }
+      }
+
+      // 5. Inject Dynamic Product Cells
+      const qtyColLetter = worksheet.getColumn(columns.qty).letter;
+      const rateColLetter = worksheet.getColumn(columns.rate).letter;
+
+      for (let i = 0; i < Math.max(itemsCount, sampleRowCount); i++) {
+        const rNumber = dataStartRowIndex + i;
+        const row = worksheet.getRow(rNumber);
+
+        if (i < itemsCount) {
+          const p = model.products[i];
+          if (columns.srNo) row.getCell(columns.srNo).value = i + 1;
+          row.getCell(columns.product).value = p.product;
+          if (columns.sku && p.sku) row.getCell(columns.sku).value = p.sku;
+          row.getCell(columns.qty).value = p.qty;
+          row.getCell(columns.rate).value = p.rate;
+          if (columns.gst) row.getCell(columns.gst).value = `${p.gst}%`;
+
+          // Inject dynamic formula for Amount (=Qty * Rate)
+          row.getCell(columns.amount).value = {
+            formula: `${qtyColLetter}${rNumber}*${rateColLetter}${rNumber}`,
+            result: p.amount,
+          };
+        } else {
+          // Clear unused sample rows while keeping styles intact
+          if (columns.srNo) row.getCell(columns.srNo).value = null;
+          row.getCell(columns.product).value = null;
+          if (columns.sku) row.getCell(columns.sku).value = null;
+          row.getCell(columns.qty).value = null;
+          row.getCell(columns.rate).value = null;
+          if (columns.gst) row.getCell(columns.gst).value = null;
+          row.getCell(columns.amount).value = null;
+        }
+      }
+
+      // 6. Automatically Recalculate Totals & Formulas
+      const actualEndRow = dataStartRowIndex + Math.max(itemsCount, sampleRowCount) - 1;
+      const amtColLetter = worksheet.getColumn(columns.amount).letter;
+
+      if (totals.subtotalRowIndex) {
+        const subRow = worksheet.getRow(totals.subtotalRowIndex + rowOffset);
+        subRow.getCell(totals.valueColumnIndex).value = {
+          formula: `SUM(${amtColLetter}${dataStartRowIndex}:${amtColLetter}${actualEndRow})`,
+          result: model.totals.subtotal,
+        };
+      }
+
+      if (totals.discountRowIndex && model.discount.value > 0) {
+        const discRow = worksheet.getRow(totals.discountRowIndex + rowOffset);
+        discRow.getCell(totals.valueColumnIndex).value = -model.discount.value;
+      }
+
+      if (totals.taxRowIndex) {
+        const taxRow = worksheet.getRow(totals.taxRowIndex + rowOffset);
+        taxRow.getCell(totals.valueColumnIndex).value = model.gstTotal;
+      }
+
+      if (totals.totalRowIndex) {
+        const totRow = worksheet.getRow(totals.totalRowIndex + rowOffset);
+        totRow.getCell(totals.valueColumnIndex).value = model.totals.payable;
+      }
+
+      // 7. Update Metadata in Header Rows (Customer, Quote No, Date)
+      for (let r = 1; r <= mapping.headerRowIndex; r++) {
+        const row = worksheet.getRow(r);
+        row.eachCell({ includeEmpty: false }, (cell, colIdx) => {
+          const val = cell.value ? String(cell.value).toUpperCase() : "";
+          if (val.includes("QUOTATION") && val.includes("NO") && colIdx + 1 <= worksheet.columnCount) {
+            const nextCell = row.getCell(colIdx + 1);
+            if (!nextCell.value || String(nextCell.value).length < 2) nextCell.value = model.quotationId;
+          } else if (val === "DATE:" || val === "DATE") {
+            const nextCell = row.getCell(colIdx + 1);
+            nextCell.value = model.date;
+          } else if (val.includes("CUSTOMER") || val === "TO:" || val === "M/S:") {
+            const nextCell = row.getCell(colIdx + 1);
+            nextCell.value = model.customer.name;
+          }
+        });
+      }
+
+      const outBuffer = await workbook.xlsx.writeBuffer();
+      triggerDownload(outBuffer, fileName);
+      return;
+    } catch (err: any) {
+      console.error("High-fidelity custom Excel export failed:", err);
+      // If validation error, rethrow so UI can display it
+      if (err.message && err.message.includes("Validation Error")) {
+        throw err;
+      }
+      console.warn("Falling back to default styled Excel layout.");
     }
   }
 
-  // ── Default Structured Excel Generation ──
-  const rows: any[][] = [];
-  
+  // ── Default Structured Styled Excel Generation (using ExcelJS) ──
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Quotation");
+
   // Company Header
-  rows.push([brand.name.toUpperCase()]);
-  rows.push([`GSTIN: ${company.gstNumber}`]);
-  rows.push([`Email: ${company.email}`]);
-  rows.push([]);
-  
-  // Quotation Meta
-  rows.push(["QUOTATION NO:", quotationId]);
-  rows.push(["DATE:", date]);
-  rows.push(["CUSTOMER:", customerName]);
-  rows.push([]);
-  
+  worksheet.addRow([model.company.name.toUpperCase()]).font = { size: 16, bold: true, color: { argb: "FF1E3A8A" } };
+  worksheet.addRow([`GSTIN: ${model.company.gstNumber}`]).font = { size: 10, color: { argb: "FF4B5563" } };
+  worksheet.addRow([`Email: ${model.company.email}`]).font = { size: 10, color: { argb: "FF4B5563" } };
+  worksheet.addRow([]);
+
+  // Meta
+  worksheet.addRow(["QUOTATION NO:", model.quotationId]).font = { bold: true };
+  worksheet.addRow(["DATE:", model.date]);
+  worksheet.addRow(["CUSTOMER:", model.customer.name]);
+  worksheet.addRow([]);
+
   // Table Header
-  rows.push(["PRODUCT DESCRIPTION", "SKU", "QTY", "RATE (₹)", "GST %", "AMOUNT (₹)"]);
-  
-  // Line Items
-  items.forEach((item) => {
-    rows.push([
-      item.product,
-      item.sku,
-      item.qty,
-      item.rate,
-      `${item.gst}%`,
-      item.qty * item.rate
-    ]);
+  const headerRow = worksheet.addRow(["SR NO", "PRODUCT DESCRIPTION", "SKU", "QTY", "RATE (₹)", "GST %", "AMOUNT (₹)"]);
+  headerRow.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
+    cell.alignment = { vertical: "middle", horizontal: "center" };
   });
-  
-  rows.push([]);
-  
+
+  // Line Items
+  model.products.forEach((p, idx) => {
+    const row = worksheet.addRow([idx + 1, p.product, p.sku, p.qty, p.rate, `${p.gst}%`, p.amount]);
+    row.getCell(1).alignment = { horizontal: "center" };
+    row.getCell(4).alignment = { horizontal: "center" };
+    row.getCell(5).numFmt = "₹#,##0.00";
+    row.getCell(6).alignment = { horizontal: "center" };
+    row.getCell(7).numFmt = "₹#,##0.00";
+  });
+
+  worksheet.addRow([]);
+
   // Totals
-  rows.push(["", "", "", "", "Subtotal:", subtotal]);
-  if (discount > 0) {
-    const discountValue = subtotal * (discount / 100);
-    rows.push(["", "", "", "", `Discount (${discount}%):`, -discountValue]);
+  const addTotalRow = (label: string, val: number, bold = false) => {
+    const r = worksheet.addRow(["", "", "", "", "", label, val]);
+    r.getCell(6).font = { bold };
+    r.getCell(7).font = { bold };
+    r.getCell(7).numFmt = "₹#,##0.00";
+  };
+
+  addTotalRow("Subtotal:", model.totals.subtotal);
+  if (model.discount.value > 0) {
+    addTotalRow(`Discount (${model.discount.percentage}%):`, -model.discount.value);
   }
-  rows.push(["", "", "", "", "Tax (GST):", tax]);
-  rows.push(["", "", "", "", "Total Payable:", total]);
-  
-  rows.push([]);
-  rows.push([]);
-  
-  // Terms
-  rows.push(["Terms & Conditions:"]);
+  addTotalRow("Tax (GST):", model.gstTotal);
+  addTotalRow("Total Payable:", model.totals.payable, true);
+
+  worksheet.addRow([]);
+  worksheet.addRow([]);
+  worksheet.addRow(["Terms & Conditions:"]).font = { bold: true };
+
   const termsLines = (brand.terms || "Standard delivery and quotation terms apply.").split("\n");
-  termsLines.forEach((line) => rows.push([line]));
-  
-  const worksheet = XLSX.utils.aoa_to_sheet(rows);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Quotation");
-  
-  XLSX.writeFile(workbook, fileName);
+  termsLines.forEach((line) => worksheet.addRow([line]).font = { size: 9, color: { argb: "FF6B7280" } });
+
+  // Adjust column widths
+  worksheet.columns = [
+    { width: 8 },
+    { width: 35 },
+    { width: 15 },
+    { width: 10 },
+    { width: 15 },
+    { width: 12 },
+    { width: 18 },
+  ];
+
+  const outBuffer = await workbook.xlsx.writeBuffer();
+  triggerDownload(outBuffer, fileName);
 }

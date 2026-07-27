@@ -43,42 +43,48 @@ export function ExportDesignModal({
     // Also persist their design choice as the new default
     saveBrandSettings(exportBrand);
 
-    setTimeout(() => {
-      selectedQuotes.forEach((quote) => {
-        if (format === "pdf") {
-          downloadQuotationPdf({
-            brand: exportBrand,
-            items: quote.items || [],
-            discount: quote.discount || 0,
-            total: quote.total || 0,
-            quotationId: quote.id,
-            customerName: quote.customer,
-            date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
-          });
-        } else {
-          downloadQuotationExcel({
-            brand: exportBrand,
-            company: DEFAULT_COMPANY,
-            items: quote.items || [],
-            discount: quote.discount || 0,
-            tax: quote.tax || 0,
-            total: quote.total || 0,
-            quotationId: quote.id,
-            customerName: quote.customer,
-            date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
-          });
+    setTimeout(async () => {
+      try {
+        for (const quote of selectedQuotes) {
+          if (format === "pdf") {
+            downloadQuotationPdf({
+              brand: exportBrand,
+              items: quote.items || [],
+              discount: quote.discount || 0,
+              total: quote.total || 0,
+              quotationId: quote.id,
+              customerName: quote.customer,
+              date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
+            });
+          } else {
+            await downloadQuotationExcel({
+              brand: exportBrand,
+              company: DEFAULT_COMPANY,
+              items: quote.items || [],
+              discount: quote.discount || 0,
+              tax: quote.tax || 0,
+              total: quote.total || 0,
+              quotationId: quote.id,
+              customerName: quote.customer,
+              date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
+            });
+          }
         }
-      });
 
-      setIsExporting(false);
-      notify(
-        `🎉 Successfully exported ${selectedQuotes.length} quotation(s) in ${format.toUpperCase()} format using "${
-          selectedStyle === "custom_uploaded"
-            ? "Custom Uploaded Design"
-            : selectedStyle?.toUpperCase()
-        }" layout!`
-      );
-      onClose();
+        setIsExporting(false);
+        notify(
+          `🎉 Successfully exported ${selectedQuotes.length} quotation(s) in ${format.toUpperCase()} format using "${
+            selectedStyle === "custom_uploaded"
+              ? "Custom Uploaded Design"
+              : selectedStyle?.toUpperCase()
+          }" layout!`
+        );
+        onClose();
+      } catch (err: any) {
+        setIsExporting(false);
+        console.error("Export failed:", err);
+        notify(`⚠️ Export failed: ${err.message || "Please check quotation data"}`);
+      }
     }, 400);
   };
 

@@ -31,35 +31,40 @@ export function RecentQuotations() {
     }
   };
 
-  const handleDownload = (quote: Quotation, format: "pdf" | "excel") => {
+  const handleDownload = async (quote: Quotation, format: "pdf" | "excel") => {
     const brand = getBrandSettings();
     const company = DEFAULT_COMPANY;
     const items = quote.items && quote.items.length > 0 ? quote.items : [];
 
-    if (format === "pdf") {
-      downloadQuotationPdf({
-        brand,
-        items,
-        discount: quote.discount || 0,
-        total: quote.total || 0,
-        quotationId: quote.id,
-        customerName: quote.customer,
-        date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
-      });
-      notify(`📄 Downloaded PDF for ${quote.id}`);
-    } else {
-      downloadQuotationExcel({
-        brand,
-        company,
-        items,
-        discount: quote.discount || 0,
-        tax: quote.tax || 0,
-        total: quote.total || 0,
-        quotationId: quote.id,
-        customerName: quote.customer,
-        date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
-      });
-      notify(`📊 Downloaded Excel for ${quote.id}`);
+    try {
+      if (format === "pdf") {
+        downloadQuotationPdf({
+          brand,
+          items,
+          discount: quote.discount || 0,
+          total: quote.total || 0,
+          quotationId: quote.id,
+          customerName: quote.customer,
+          date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
+        });
+        notify(`📄 Downloaded PDF for ${quote.id}`);
+      } else {
+        await downloadQuotationExcel({
+          brand,
+          company,
+          items,
+          discount: quote.discount || 0,
+          tax: quote.tax || 0,
+          total: quote.total || 0,
+          quotationId: quote.id,
+          customerName: quote.customer,
+          date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
+        });
+        notify(`📊 Downloaded Excel for ${quote.id}`);
+      }
+    } catch (err: any) {
+      console.error("Quick download failed:", err);
+      notify(`⚠️ Download failed: ${err.message || "Please check quotation data"}`);
     }
   };
 

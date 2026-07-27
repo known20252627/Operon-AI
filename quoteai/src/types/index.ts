@@ -30,6 +30,33 @@ export type Theme = "light" | "dark";
 
 // ── Brand / Company ─────────────────────────
 
+export interface ExcelTemplateMapping {
+  sheetName: string;
+  headerRowIndex: number;      // 1-indexed row number of table headers
+  dataStartRowIndex: number;   // 1-indexed first row where items should be injected
+  dataEndRowIndex: number;     // 1-indexed last row of sample items before totals/footer
+  columns: {
+    srNo?: number;             // Column number (1 for A, 2 for B, etc.)
+    product: number;           // Column number
+    sku?: number;
+    qty: number;
+    rate: number;
+    gst?: number;
+    amount: number;
+  };
+  totals: {
+    subtotalRowIndex?: number; // 1-indexed row number
+    discountRowIndex?: number;
+    taxRowIndex?: number;
+    totalRowIndex?: number;
+    valueColumnIndex: number;  // Column number where total values reside
+  };
+  companyInfo?: {
+    nameRow?: number;
+    nameCol?: number;
+  };
+}
+
 export interface BrandSettings {
   name: string;
   accent: string;
@@ -40,6 +67,7 @@ export interface BrandSettings {
   watermarkText?: string;
   customExcelTemplate?: string; // Base64 representation of uploaded Excel template (.xlsx/.xls)
   customExcelTemplateName?: string;
+  customExcelMapping?: ExcelTemplateMapping;
 }
 
 export interface CompanySettings {
