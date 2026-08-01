@@ -121,25 +121,40 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         }
       }
 
-      // 5. Inject Dynamic Product Cells (with strict collision prevention so product description is never overwritten)
-      const usedCols = new Set<number>();
-      const safeProductCol = columns.product || 1;
-      usedCols.add(safeProductCol);
+      // 5. Real-Time Table Header Discovery & Safe Product Injection
+      // Directly inspect the actual worksheet header row to find real column indices, overriding any buggy stored mappings.
+      const discoveredCols: {
+        srNo?: number;
+        product?: number;
+        sku?: number;
+        qty?: number;
+        rate?: number;
+        gst?: number;
+        amount?: number;
+      } = {};
 
-      const safeAmountCol = (columns.amount && !usedCols.has(columns.amount)) ? columns.amount : (worksheet.columnCount || 6);
-      usedCols.add(safeAmountCol);
+      const headerRow = worksheet.getRow(mapping.headerRowIndex || 16);
+      headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+        const text = String(cell.value || "").toUpperCase().trim();
+        if (/^(SR|SL|S\.?\s*NO|NO\.|SR\.\s*NO|SL\.\s*NO|SNO)/.test(text)) discoveredCols.srNo = colNumber;
+        else if (/^(PRODUCT|ITEM|DESCRIPTION|PARTICULARS|NAME|SPECIFICATION|GOODS|DETAILS)/.test(text)) discoveredCols.product = colNumber;
+        else if (/^(SKU|MODEL|CODE|PART|ITEM\s*CODE)/.test(text)) discoveredCols.sku = colNumber;
+        else if (/^(QTY|QUANTITY|PIECES|UNITS|NOS)/.test(text)) discoveredCols.qty = colNumber;
+        else if (/^(RATE|PRICE|UNIT\s*COST|COST|UNIT\s*PRICE)/.test(text)) discoveredCols.rate = colNumber;
+        else if (/^(GST|TAX|TAXED|TAXABLE|IGST|CGST|SGST|GST\s*%)/.test(text)) discoveredCols.gst = colNumber;
+        else if (/^(AMOUNT|TOTAL|VALUE|NET)/.test(text)) discoveredCols.amount = colNumber;
+      });
 
-      function getSafeCol(colIdx?: number): number | undefined {
-        if (!colIdx || usedCols.has(colIdx)) return undefined;
-        usedCols.add(colIdx);
-        return colIdx;
-      }
-
-      const safeQtyCol = getSafeCol(columns.qty);
-      const safeRateCol = getSafeCol(columns.rate);
-      const safeGstCol = getSafeCol(columns.gst);
-      const safeSkuCol = getSafeCol(columns.sku);
-      const safeSrNoCol = getSafeCol(columns.srNo);
+      // Use discovered columns if found, otherwise fall back to stored columns, but NEVER let secondary columns overwrite primary ones or break merged cell blocks
+      const safeProductCol = discoveredCols.product || columns.product || 1;
+      const safeAmountCol = discoveredCols.amount || (columns.amount !== safeProductCol ? columns.amount : undefined) || worksheet.columnCount || 6;
+      
+      // Only write to optional columns if they exist explicitly in the actual table headers!
+      const safeSrNoCol = discoveredCols.srNo;
+      const safeSkuCol = discoveredCols.sku;
+      const safeQtyCol = discoveredCols.qty;
+      const safeRateCol = discoveredCols.rate;
+      const safeGstCol = discoveredCols.gst;
 
       for (let i = 0; i < Math.max(itemsCount, sampleRowCount); i++) {
         const rNumber = dataStartRowIndex + i;
@@ -148,13 +163,23 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         if (i < itemsCount) {
           const p = model.products[i];
           if (safeSrNoCol) row.getCell(safeSrNoCol).value = i + 1;
-          row.getCell(safeProductCol).value = p.product;
+
+          // If Qty or Rate columns don't exist in this template's table layout, cleanly fold them into the Product Description so OCR data isn't lost!
+          let displayText = p.product;
+          if (!safeQtyCol || !safeRateCol) {
+            const details = [];
+            if (!safeQtyCol && p.qty !== undefined) details.push(`Qty: ${p.qty}`);
+            if (!safeRateCol && p.rate !== undefined) details.push(`Rate: ₹${p.rate}`);
+            if (details.length > 0) displayText += ` (${details.join(", ")})`;
+          }
+          row.getCell(safeProductCol).value = displayText;
+
           if (safeSkuCol && p.sku) row.getCell(safeSkuCol).value = p.sku;
           if (safeQtyCol) row.getCell(safeQtyCol).value = p.qty;
           if (safeRateCol) row.getCell(safeRateCol).value = p.rate;
-          if (safeGstCol) row.getCell(safeGstCol).value = `${p.gst}%`;
+          if (safeGstCol && safeGstCol !== safeProductCol) row.getCell(safeGstCol).value = `${p.gst}%`;
 
-          // Inject dynamic formula for Amount (=Qty * Rate) if both Qty and Rate columns exist safely
+          // Inject dynamic formula for Amount (=Qty * Rate) only when both separate columns safely exist
           if (safeQtyCol && safeRateCol) {
             const qtyColLetter = worksheet.getColumn(safeQtyCol).letter;
             const rateColLetter = worksheet.getColumn(safeRateCol).letter;
@@ -179,7 +204,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
 
       // 6. Automatically Recalculate Totals & Formulas
       const actualEndRow = dataStartRowIndex + Math.max(itemsCount, sampleRowCount) - 1;
-      const amtColLetter = worksheet.getColumn(columns.amount).letter;
+      const amtColLetter = worksheet.getColumn(safeAmountCol).letter;
 
       if (totals.subtotalRowIndex) {
         const subRow = worksheet.getRow(totals.subtotalRowIndex + rowOffset);
