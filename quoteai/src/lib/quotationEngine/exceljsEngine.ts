@@ -3,6 +3,7 @@
 import ExcelJS from "exceljs";
 import type { ExcelPayload } from "@/lib/excel";
 import type { QuotationEngineMapping, PreExportValidationResult, QuotationEngineResponse } from "./types";
+import { runLegacyQuotationEngine } from "./legacyEngine";
 import { createQuotationModel, type InternalQuotationModel } from "@/services/quotationModel";
 import { analyzeExcelTemplate } from "@/services/excelAnalyzer";
 import type { ExcelTemplateMapping } from "@/types";
@@ -30,8 +31,38 @@ function triggerDownload(buffer: ExcelJS.Buffer, fileName: string): void {
   window.URL.revokeObjectURL(url);
 }
 
+function getCellText(cellValue: unknown): string {
+  if (cellValue === null || cellValue === undefined) return "";
+  if (typeof cellValue === "string") return cellValue.trim();
+  if (typeof cellValue === "number" || typeof cellValue === "boolean") return String(cellValue);
+  if (typeof cellValue === "object" && "richText" in (cellValue as any)) {
+    const rt = (cellValue as any).richText;
+    return rt.map((r: any) => r.text).join("").trim();
+  }
+  if (typeof cellValue === "object" && "result" in (cellValue as any)) {
+    return String((cellValue as any).result || "").trim();
+  }
+  return String(cellValue).trim();
+}
+
+function fuzzyMatch(text: string, keywords: string[]): boolean {
+  const lower = text.toLowerCase().trim();
+  return keywords.some((kw) => lower === kw || lower.includes(kw));
+}
+
+function isBlankOrPlaceholder(val: any): boolean {
+  if (val === null || val === undefined || val === "") return true;
+  const s = getCellText(val).trim();
+  if (!s) return true;
+  if (/^\[.+\]$/.test(s) || /^<.+>$/.test(s) || /_{2,}/.test(s) || /^\s*[\-\.]+\s*$/.test(s) || s.toLowerCase() === "n/a") {
+    return true;
+  }
+  return false;
+}
+
 /**
- * Extracts or converts existing template analysis into standard QuotationEngineMapping.
+ * Extracts or converts existing template analysis into standard QuotationEngineMapping,
+ * with intelligent column collision prevention.
  */
 function toEngineMapping(mapping: ExcelTemplateMapping): QuotationEngineMapping {
   const clientCoords = mapping.clientDetailsCoords || {};
@@ -43,7 +74,6 @@ function toEngineMapping(mapping: ExcelTemplateMapping): QuotationEngineMapping 
   let priceCol = mapping.columns?.rate;
   let gstCol = mapping.columns?.gst;
 
-  // Prevent collisions when AI failed to identify qty or price columns
   if (!qtyCol || !priceCol || qtyCol === amountCol || priceCol === amountCol || qtyCol === productCol || priceCol === productCol) {
     if (amountCol > productCol + 2) {
       priceCol = amountCol - 1;
@@ -88,19 +118,16 @@ function validatePreExport(
   let missingMapping = false;
   let invalidTemplate = false;
 
-  // 1. Check Invalid Template
   if (!worksheet || !worksheet.rowCount || worksheet.rowCount <= 0) {
     invalidTemplate = true;
     errors.push("Invalid template: Worksheet is empty or cannot be accessed.");
   }
 
-  // 2. Check Missing Mapping
   if (!mapping.productStartRow || !mapping.productColumn || !mapping.qtyColumn || !mapping.priceColumn || !mapping.amountColumn) {
     missingMapping = true;
-    errors.push("Missing mapping: One or more essential column coordinates (product, qty, price, amount) are missing.");
+    errors.push("Missing mapping: Essential column coordinates are missing.");
   }
 
-  // 3. Check Data Model & Populated Rows for Products, Quantities, Prices
   if (!model.products || model.products.length === 0) {
     missingProduct = true;
     errors.push("Missing product: No products present in the quotation model.");
@@ -127,7 +154,6 @@ function validatePreExport(
     });
   }
 
-  // 4. Check Broken Formulas across the entire sheet
   worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
       const val = cell.value;
@@ -136,7 +162,7 @@ function validatePreExport(
           const errCode = String((val as any).error);
           if (/^#(REF!|VALUE!|NAME\?|DIV\/0!|NULL!|N\/A|NUM!)/i.test(errCode)) {
             brokenFormula = true;
-            errors.push(`Broken formula detected at cell ${cell.address} (Row ${rowNumber}, Col ${colNumber}): ${errCode}`);
+            errors.push(`Broken formula at cell ${cell.address} (Row ${rowNumber}, Col ${colNumber}): ${errCode}`);
           }
         }
         if ("formula" in (val as any)) {
@@ -168,24 +194,26 @@ function validatePreExport(
   };
 }
 
-/**
- * Helper: Shift relative row occurrences in an Excel formula string from oldRow to newRow.
- * E.g., shifting formula "E12*F12" from row 12 to 13 becomes "E13*F13".
- */
 function shiftFormulaRow(formula: string, oldRow: number, newRow: number): string {
   const reg = new RegExp(`(\\b[A-Z]+)${oldRow}\\b`, "gi");
   return formula.replace(reg, `$1${newRow}`);
 }
 
 /**
- * SECOND Quotation Engine: High-Fidelity ExcelJS Engine
- * Implements strict, reliable mapping preservation and robust pre-export validation.
+ * UNIFIED MERGED QUOTATION ENGINE:
+ * Merges high-fidelity ExcelJS structural preservation with robust Indian B2B keyword
+ * and placeholder recognition from the legacy engine.
  */
 export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<QuotationEngineResponse> {
   const { brand, company, items, discount, tax, total, quotationId, customerName, clientDetails, date } = payload;
   const warnings: string[] = [];
 
-  // 1. Build Data Model
+  // If no custom Excel template is provided, directly invoke legacy default styled layout generator
+  if (!brand.customExcelTemplate) {
+    console.log("✨ No custom template detected. Using standard legacy styled Excel generation...");
+    return runLegacyQuotationEngine(payload);
+  }
+
   const model: InternalQuotationModel = createQuotationModel(
     {
       quotationId,
@@ -201,11 +229,6 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     company
   );
 
-  // 2. Require Custom Excel Template for ExcelJS Engine
-  if (!brand.customExcelTemplate) {
-    throw new Error("ExcelJS Engine requires a custom uploaded Excel template. Falling back...");
-  }
-
   const buffer = base64ToArrayBuffer(brand.customExcelTemplate);
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
@@ -215,36 +238,201 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     throw new Error("Invalid template: No worksheet found in workbook.");
   }
 
-  // 3. Retrieve or Analyze Template Mapping (Strictly once, NO redundant re-scans)
+  // Retrieve or analyze template mapping strictly once
   let rawMapping: ExcelTemplateMapping | undefined = brand.customExcelMapping;
   if (!rawMapping) {
-    console.log("⚡ ExcelJS Engine: No stored mapping found. Running single AI template analysis...");
+    console.log("⚡ Merged Engine: No stored mapping found. Running single AI template analysis...");
     rawMapping = await analyzeExcelTemplate(brand.customExcelTemplate);
   } else {
-    console.log("✨ ExcelJS Engine: Reusing stored template mapping without re-analysis.");
+    console.log("✨ Merged Engine: Reusing stored template mapping without re-analysis.");
   }
 
   const engineMapping: QuotationEngineMapping = toEngineMapping(rawMapping);
 
-  // 4. Fill Only Dynamic Fields via Exact Coordinate Mapping
+  // Apply explicit AI coordinates first
   if (engineMapping.customerNameCell) {
-    const cell = worksheet.getRow(engineMapping.customerNameCell.row).getCell(engineMapping.customerNameCell.col);
-    cell.value = model.customer.name || "";
+    worksheet.getRow(engineMapping.customerNameCell.row).getCell(engineMapping.customerNameCell.col).value = model.customer.name || "";
   }
   if (engineMapping.addressCell && model.customer.address) {
-    const cell = worksheet.getRow(engineMapping.addressCell.row).getCell(engineMapping.addressCell.col);
-    cell.value = model.customer.address;
+    worksheet.getRow(engineMapping.addressCell.row).getCell(engineMapping.addressCell.col).value = model.customer.address;
   }
   if (engineMapping.quotationNumberCell) {
-    const cell = worksheet.getRow(engineMapping.quotationNumberCell.row).getCell(engineMapping.quotationNumberCell.col);
-    cell.value = model.quotationId;
+    worksheet.getRow(engineMapping.quotationNumberCell.row).getCell(engineMapping.quotationNumberCell.col).value = model.quotationId;
   }
   if (engineMapping.dateCell) {
-    const cell = worksheet.getRow(engineMapping.dateCell.row).getCell(engineMapping.dateCell.col);
-    cell.value = model.date;
+    worksheet.getRow(engineMapping.dateCell.row).getCell(engineMapping.dateCell.col).value = model.date;
   }
 
-  // 5. Determine Sample Rows & Handle Non-Destructive Dynamic Row Insertion
+  const hasAiClientDetails = !!(engineMapping.customerNameCell || engineMapping.addressCell);
+  const headerRowIndex = rawMapping.headerRowIndex || engineMapping.productStartRow - 1;
+
+  // MERGED LAYER: Comprehensive B2B Keyword & Universal Placeholder Scanner
+  let termsInjected = false;
+  for (let r = 1; r <= (worksheet.rowCount || 100); r++) {
+    const row = worksheet.getRow(r);
+    const isHeaderArea = r < engineMapping.productStartRow;
+    const isCompanySection = r <= Math.max(6, Math.floor(engineMapping.productStartRow / 2) - 1);
+
+    row.eachCell({ includeEmpty: false }, (cell, colIdx) => {
+      const text = getCellText(cell.value);
+      if (!text) return;
+
+      const lower = text.toLowerCase().trim();
+      const upper = text.toUpperCase().trim();
+
+      // Company Info placeholders
+      if (isCompanySection) {
+        if (fuzzyMatch(text, ["your company name", "company name", "your company", "[company name]"])) {
+          cell.value = model.company.name;
+          return;
+        }
+        if (fuzzyMatch(text, ["123 your street", "street address", "address line 1", "[street address]", "[address]"])) {
+          cell.value = model.company.gstNumber ? `GSTIN: ${model.company.gstNumber}` : (model.company.email || "");
+          return;
+        }
+        if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "[city, st zip]", "[city, state, zip]", "st zip"])) {
+          cell.value = "India";
+          return;
+        }
+        if (fuzzyMatch(text, ["phone", "phone number", "[000-000-0000]", "[phone]"]) || lower.startsWith("phone:")) {
+          cell.value = model.company.email ? `Email: ${model.company.email}` : "";
+          return;
+        }
+        if (fuzzyMatch(text, ["yourwebsite.com", "www.yourwebsite.com", "website", "somedomain.com"])) {
+          cell.value = model.company.email ? `Website: ${model.company.email.split("@")[1] || model.company.email}` : "";
+          return;
+        }
+      }
+
+      // Client & Indian B2B Placeholders
+      if (!hasAiClientDetails && isHeaderArea && !isCompanySection) {
+        const trimmedText = text.trim();
+
+        // Colon label neighbor check (e.g. "M/s:", "Bill To:", "Attn:", "Address:")
+        if (trimmedText.endsWith(":") && trimmedText.length <= 35) {
+          const labelNoColon = trimmedText.slice(0, -1).trim();
+          let targetValue = "";
+
+          if (fuzzyMatch(labelNoColon, ["client name", "customer name", "party name", "buyer name", "[name]", "recipient name", "[company name]", "m/s", "to", "bill to", "billed to", "ship to", "consignee", "kind attn", "attn", "party", "customer", "name"])) {
+            targetValue = model.customer.name;
+          } else if (fuzzyMatch(labelNoColon, ["street address", "client address", "address line 1", "address", "[street address]", "delivery address", "billing address"])) {
+            targetValue = model.customer.address || "N/A";
+          } else if (fuzzyMatch(labelNoColon, ["city, state, country", "city state country", "city, state", "[city, st zip]", "st zip", "[city, state, zip]", "gstin", "gst no", "gst number", "tax id", "gst"])) {
+            targetValue = model.customer.gstNumber ? (labelNoColon.toUpperCase().includes("GST") ? model.customer.gstNumber : `GSTIN: ${model.customer.gstNumber}`) : "";
+          } else if (fuzzyMatch(labelNoColon, ["phone", "phone number", "mobile", "contact", "tel", "email", "[phone]", "[000-000-0000]", "mob", "contact no", "cell"])) {
+            const contactParts = [model.customer.phone, model.customer.email].filter(Boolean);
+            targetValue = contactParts.length > 0 ? `Phone: ${contactParts.join(" | ")}` : "";
+          }
+
+          if (targetValue) {
+            const cellRight = row.getCell(colIdx + 1);
+            const nextRow = worksheet.getRow(r + 1);
+            const cellBelow = nextRow.getCell(colIdx);
+            if (isBlankOrPlaceholder(cellRight.value)) {
+              cellRight.value = targetValue;
+            } else if (isBlankOrPlaceholder(cellBelow.value)) {
+              cellBelow.value = targetValue;
+            } else {
+              cell.value = `${trimmedText} ${targetValue}`;
+            }
+            return;
+          }
+        }
+
+        if (fuzzyMatch(text, ["client name", "customer name", "party name", "buyer name", "[name]", "recipient name", "[company name]", "m/s", "to,", "bill to", "billed to", "ship to", "consignee", "kind attn", "attn", "party", "customer"])) {
+          cell.value = model.customer.name;
+          return;
+        }
+        if (fuzzyMatch(text, ["street address", "client address", "address line 1", "address", "[street address]", "delivery address", "billing address"])) {
+          cell.value = model.customer.address || "N/A";
+          return;
+        }
+        if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "[city, st zip]", "st zip", "[city, state, zip]", "gstin", "gst no", "gst number", "tax id"])) {
+          cell.value = model.customer.gstNumber ? `GSTIN: ${model.customer.gstNumber}` : "";
+          return;
+        }
+        if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact", "tel", "email", "[phone]", "[000-000-0000]", "mob", "contact no", "cell"])) {
+          const contactParts = [model.customer.phone, model.customer.email].filter(Boolean);
+          cell.value = contactParts.length > 0 ? `Phone: ${contactParts.join(" | ")}` : "";
+          return;
+        }
+      }
+
+      // Universal Placeholders
+      if (lower === "mm/dd/yyyy" || lower === "dd/mm/yyyy" || lower === "yyyy-mm-dd" || lower === "[date]") {
+        cell.value = model.date;
+        return;
+      }
+      if (lower === "00001" || lower === "00002" || lower === "[number]" || lower === "[quote #]" || lower === "[123456]") {
+        cell.value = model.quotationId;
+        return;
+      }
+      if (lower === "customer123" || lower === "[customer id]" || lower === "[id]" || lower === "[123]") {
+        cell.value = model.customer.name;
+        return;
+      }
+      if (fuzzyMatch(text, ["prepared by", "sales rep", "salesperson", "[salesperson name]"])) {
+        cell.value = model.company.name ? `Prepared by: ${model.company.name}` : "";
+        return;
+      }
+
+      // Terms & Conditions section below table
+      if (r > engineMapping.productStartRow) {
+        const termsRegex = /terms\s*(&|and)?\s*condition|^terms:?$|\bt\s*&\s*c\b/i;
+        const isTermsPhrase = fuzzyMatch(text, ["enter your terms", "terms and conditions here", "special notes and instructions", "thank you for your business"]);
+        if (termsRegex.test(text) || isTermsPhrase) {
+          if (termsInjected) {
+            cell.value = /thank\s*you/i.test(text) ? "Thank you for your business!" : null;
+            return;
+          }
+          termsInjected = true;
+          const termsText = brand.terms || "Standard delivery and quotation terms apply.";
+          const isHeadingLabel = text.length < 30 && !/enter|here|instruction|thank you/i.test(text);
+          if (!isHeadingLabel) {
+            cell.value = termsText;
+          } else {
+            let replaced = false;
+            for (let nextOffset = 1; nextOffset <= 4; nextOffset++) {
+              const targetRowIdx = r + nextOffset;
+              if (targetRowIdx > (worksheet.rowCount || targetRowIdx + 4)) break;
+              const nextRow = worksheet.getRow(targetRowIdx);
+              let hitOtherSection = false;
+              let targetCell: any = null;
+              nextRow.eachCell({ includeEmpty: false }, (c) => {
+                const cText = getCellText(c.value).trim();
+                if (cText) {
+                  if (/^(BANK|ACCOUNT|IFSC|SIGNATURE|AUTHORISED|FOR\s+|NOTE:|THANK)/i.test(cText)) {
+                    hitOtherSection = true;
+                  } else if (!targetCell) {
+                    targetCell = c;
+                  }
+                }
+              });
+              if (hitOtherSection) break;
+              if (targetCell) {
+                if (!replaced) {
+                  targetCell.value = termsText;
+                  replaced = true;
+                } else {
+                  targetCell.value = null;
+                }
+              }
+            }
+            if (!replaced) {
+              worksheet.getRow(r + 1).getCell(colIdx).value = termsText;
+            }
+          }
+          return;
+        }
+      }
+
+      if (typeof cell.value === "string" && cell.value.trim().startsWith("[") && cell.value.trim().endsWith("]")) {
+        cell.value = null;
+      }
+    });
+  }
+
+  // Determine sample rows & perform non-destructive dynamic row insertion
   const startRow = engineMapping.productStartRow;
   const origEndRow = rawMapping.dataEndRowIndex || startRow;
   const sampleRowCount = Math.max(1, origEndRow - startRow + 1);
@@ -256,10 +444,8 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     const sampleReferenceRowNumber = origEndRow;
     const sampleRefRow = worksheet.getRow(sampleReferenceRowNumber);
 
-    // Splice blank rows above totals/footer while preserving sheet layout
     worksheet.spliceRows(sampleReferenceRowNumber + 1, 0, ...new Array(rowsInserted).fill([]));
 
-    // Copy formatting, styles, heights, and borders cleanly to inserted rows
     for (let i = 1; i <= rowsInserted; i++) {
       const targetRowNumber = sampleReferenceRowNumber + i;
       const targetRow = worksheet.getRow(targetRowNumber);
@@ -273,7 +459,7 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     }
   }
 
-  // 6. Populate Dynamic Line Items & Preserve Formulas Whenever Possible
+  // Populate line items while preserving formulas and without destroying adjacent columns
   const referenceSampleRow = worksheet.getRow(startRow);
   const sampleAmountCellVal = referenceSampleRow.getCell(engineMapping.amountColumn).value;
   let hasNativeAmountFormula = false;
@@ -300,14 +486,12 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
 
       const amountCell = row.getCell(engineMapping.amountColumn);
       if (hasNativeAmountFormula && templateFormulaStr) {
-        // Automatically adjust row references in formula (e.g., E12*F12 -> E13*F13)
         const shiftedFormula = shiftFormulaRow(templateFormulaStr, startRow, currentRowNum);
         amountCell.value = {
           formula: shiftedFormula,
           result: p.amount,
         };
       } else {
-        // Generate reliable calculation formula if template lacked one
         const qtyLetter = worksheet.getColumn(engineMapping.qtyColumn).letter;
         const priceLetter = worksheet.getColumn(engineMapping.priceColumn).letter;
         amountCell.value = {
@@ -316,7 +500,6 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
         };
       }
     } else {
-      // For leftover sample rows in template when itemsCount < sampleRowCount, clear ONLY the item dynamic cells
       row.getCell(engineMapping.productColumn).value = null;
       row.getCell(engineMapping.qtyColumn).value = null;
       row.getCell(engineMapping.priceColumn).value = null;
@@ -325,7 +508,7 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     }
   }
 
-  // 7. Recalculate Totals & Preserve Footer Formula Integrities
+  // Recalculate totals & preserve footer formulas
   const actualEndRow = startRow + Math.max(itemsCount, sampleRowCount) - 1;
   const amtLetter = worksheet.getColumn(engineMapping.amountColumn).letter;
   const valCol = rawMapping.totals?.valueColumnIndex || engineMapping.amountColumn;
@@ -350,7 +533,6 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     const shiftedTotalIdx = rawMapping.totals.totalRowIndex + rowsInserted;
     const totalCell = worksheet.getRow(shiftedTotalIdx).getCell(valCol);
     const cellVal = totalCell.value;
-    // If original total already had a SUM or combination formula, ensure result is updated or assign standard payable
     if (!cellVal || typeof cellVal !== "object" || !("formula" in (cellVal as any))) {
       totalCell.value = model.totals.payable;
     } else {
@@ -358,15 +540,14 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     }
   }
 
-  // 8. Execute Comprehensive Pre-Export Validation
+  // Execute Comprehensive Pre-Export Validation
   const validationReport = validatePreExport(model, worksheet, engineMapping);
   if (!validationReport.valid) {
-    const errorSummary = `ExcelJS Engine Pre-Export Validation Failed:\n` + validationReport.errors.map((e) => `• ${e}`).join("\n");
+    const errorSummary = `Merged Engine Pre-Export Validation Failed:\n` + validationReport.errors.map((e) => `• ${e}`).join("\n");
     console.warn("⚠️ " + errorSummary);
     throw new Error(errorSummary);
   }
 
-  // 9. Never Overwrite User's Original Template -> Always create Quotation_Output.xlsx
   const outputBuffer = await workbook.xlsx.writeBuffer();
   triggerDownload(outputBuffer, "Quotation_Output.xlsx");
 
