@@ -1,6 +1,6 @@
 # QuoteAI — Full Codebase Reference
 
-Last updated: 2026-08-02 00:00:47
+Last updated: 2026-08-02 00:15:12
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\app\api\analyze-template\route.ts
 
@@ -10187,6 +10187,38 @@ function isBlankOrPlaceholder(val: any): boolean {
 }
 
 /**
+ * Accurately discovers all horizontal cell merges on a specific row by inspecting cell master structures.
+ * Bypasses ExcelJS runtime model bugs where model.merges is unpopulated upon initial file loading.
+ */
+function getMergedColumnSpans(worksheet: ExcelJS.Worksheet, rowNum: number): Array<{ startCol: number; endCol: number }> {
+  const spans: Array<{ startCol: number; endCol: number }> = [];
+  const maxCols = Math.max(worksheet.columnCount || 15, 35);
+  let startC = -1;
+  let currentMaster: any = null;
+
+  for (let c = 1; c <= maxCols + 1; c++) {
+    const cell = worksheet.getRow(rowNum).getCell(c);
+    if (c <= maxCols && cell && (cell as any).isMerged && (cell as any).master) {
+      const masterAddr = (cell as any).master.address;
+      if (currentMaster !== masterAddr) {
+        if (startC !== -1 && c - 1 > startC) {
+          spans.push({ startCol: startC, endCol: c - 1 });
+        }
+        startC = c;
+        currentMaster = masterAddr;
+      }
+    } else {
+      if (startC !== -1 && c - 1 > startC) {
+        spans.push({ startCol: startC, endCol: c - 1 });
+      }
+      startC = -1;
+      currentMaster = null;
+    }
+  }
+  return spans;
+}
+
+/**
  * Extracts or converts existing template analysis into standard QuotationEngineMapping,
  * with intelligent column collision prevention.
  */
@@ -10468,54 +10500,44 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
   const itemsCount = model.products.length;
   let rowsInserted = 0;
 
-  // Issue 1 & 2: Non-destructive insertion & identical style inheritance
+  // Issue 1 & 2: Non-destructive insertion & identical style inheritance with perfect alignment
   if (itemsCount > sampleRowCount) {
     rowsInserted = itemsCount - sampleRowCount;
     const sampleRefRow = worksheet.getRow(startRow); // Copy strictly from pure sample product row
+    const maxCols = Math.max(worksheet.columnCount || 15, 35);
+    const rowMerges = getMergedColumnSpans(worksheet, startRow);
 
     // Splice new empty rows exactly between product table end and footer start
     worksheet.spliceRows(origEndRow + 1, 0, ...new Array(rowsInserted).fill([]));
 
-    // Deep copy all styling, font, fill, border, height, and number formats
+    // Deep copy all styling, font, fill, border, alignment, height, and number formats across ALL columns
     for (let i = 1; i <= rowsInserted; i++) {
       const targetRowNumber = origEndRow + i;
       const targetRow = worksheet.getRow(targetRowNumber);
       targetRow.height = sampleRefRow.height;
 
-      sampleRefRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
-        const targetCell = targetRow.getCell(colIdx);
-        if (cell.style) {
-          targetCell.style = Object.assign({}, cell.style);
-          if (cell.font) targetCell.font = JSON.parse(JSON.stringify(cell.font));
-          if (cell.fill) targetCell.fill = JSON.parse(JSON.stringify(cell.fill));
-          if (cell.border) targetCell.border = JSON.parse(JSON.stringify(cell.border));
-          if (cell.alignment) targetCell.alignment = JSON.parse(JSON.stringify(cell.alignment));
+      for (let c = 1; c <= maxCols; c++) {
+        const sourceCell = sampleRefRow.getCell(c);
+        const targetCell = targetRow.getCell(c);
+        if (sourceCell.style) {
+          targetCell.style = JSON.parse(JSON.stringify(sourceCell.style));
         }
-        if (cell.numFmt) targetCell.numFmt = cell.numFmt;
+        if (sourceCell.font) targetCell.font = JSON.parse(JSON.stringify(sourceCell.font));
+        if (sourceCell.fill) targetCell.fill = JSON.parse(JSON.stringify(sourceCell.fill));
+        if (sourceCell.border) targetCell.border = JSON.parse(JSON.stringify(sourceCell.border));
+        if (sourceCell.alignment) targetCell.alignment = JSON.parse(JSON.stringify(sourceCell.alignment));
+        if (sourceCell.numFmt) targetCell.numFmt = sourceCell.numFmt;
+      }
+
+      // Replicate discovered horizontal cell merges precisely on inserted rows
+      rowMerges.forEach((span) => {
+        try {
+          worksheet.mergeCells(targetRowNumber, span.startCol, targetRowNumber, span.endCol);
+        } catch {
+          // ignore if overlap occurs
+        }
       });
     }
-
-    // Replicate merged cells for newly inserted product rows
-    const existingMerges = (worksheet.model.merges || []).slice();
-    existingMerges.forEach((mergeRange) => {
-      const match = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i.exec(mergeRange);
-      if (match) {
-        const startCol = match[1];
-        const mergeStartR = parseInt(match[2], 10);
-        const endCol = match[3];
-        const mergeEndR = parseInt(match[4], 10);
-        if (mergeStartR === startRow && mergeEndR === startRow) {
-          for (let i = 1; i <= rowsInserted; i++) {
-            const tr = origEndRow + i;
-            try {
-              worksheet.mergeCells(`${startCol}${tr}:${endCol}${tr}`);
-            } catch {
-              // ignore if overlap occurs
-            }
-          }
-        }
-      }
-    });
   }
 
   const actualEndRow = startRow + Math.max(itemsCount, sampleRowCount) - 1;
@@ -10577,6 +10599,16 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
       row.getCell(engineMapping.priceColumn).value = null;
       if (engineMapping.gstColumn) row.getCell(engineMapping.gstColumn).value = null;
       row.getCell(engineMapping.amountColumn).value = null;
+    }
+
+    // Enforce alignment and border retention so setting cell values never disturbs row layout
+    const maxCols = Math.max(worksheet.columnCount || 15, 35);
+    for (let c = 1; c <= maxCols; c++) {
+      const refCell = referenceSampleRow.getCell(c);
+      const curCell = row.getCell(c);
+      if (refCell.alignment) curCell.alignment = JSON.parse(JSON.stringify(refCell.alignment));
+      if (refCell.border) curCell.border = JSON.parse(JSON.stringify(refCell.border));
+      if (refCell.font && !curCell.font) curCell.font = JSON.parse(JSON.stringify(refCell.font));
     }
   }
 
