@@ -35,13 +35,36 @@ function triggerDownload(buffer: ExcelJS.Buffer, fileName: string): void {
  */
 function toEngineMapping(mapping: ExcelTemplateMapping): QuotationEngineMapping {
   const clientCoords = mapping.clientDetailsCoords || {};
+
+  const productCol = mapping.columns?.product || 1;
+  const amountCol = mapping.columns?.amount || (productCol + 4);
+
+  let qtyCol = mapping.columns?.qty;
+  let priceCol = mapping.columns?.rate;
+  let gstCol = mapping.columns?.gst;
+
+  // Prevent collisions when AI failed to identify qty or price columns
+  if (!qtyCol || !priceCol || qtyCol === amountCol || priceCol === amountCol || qtyCol === productCol || priceCol === productCol) {
+    if (amountCol > productCol + 2) {
+      priceCol = amountCol - 1;
+      qtyCol = amountCol - 2;
+    } else {
+      qtyCol = productCol + 1;
+      priceCol = productCol + 2;
+    }
+  }
+
+  if (gstCol && (gstCol === productCol || gstCol === qtyCol || gstCol === priceCol || gstCol === amountCol)) {
+    gstCol = undefined;
+  }
+
   return {
     productStartRow: mapping.dataStartRowIndex || (mapping.headerRowIndex ? mapping.headerRowIndex + 1 : 12),
-    productColumn: mapping.columns?.product || 2,
-    qtyColumn: mapping.columns?.qty || 4,
-    priceColumn: mapping.columns?.rate || 5,
-    gstColumn: mapping.columns?.gst,
-    amountColumn: mapping.columns?.amount || 7,
+    productColumn: productCol,
+    qtyColumn: qtyCol!,
+    priceColumn: priceCol!,
+    gstColumn: gstCol,
+    amountColumn: amountCol,
     customerNameCell: clientCoords.nameRow && clientCoords.nameCol ? { row: clientCoords.nameRow, col: clientCoords.nameCol } : undefined,
     addressCell: clientCoords.addressRow && clientCoords.addressCol ? { row: clientCoords.addressRow, col: clientCoords.addressCol } : undefined,
     quotationNumberCell: mapping.quotationNoCoords?.row && mapping.quotationNoCoords?.col ? { row: mapping.quotationNoCoords.row, col: mapping.quotationNoCoords.col } : undefined,
@@ -89,15 +112,15 @@ function validatePreExport(
       const qtyVal = row.getCell(mapping.qtyColumn).value;
       const priceVal = row.getCell(mapping.priceColumn).value;
 
-      if (!p.product || !String(p.product).trim() || prodVal === null || prodVal === undefined || !String(prodVal).trim()) {
+      if (!p.product || !String(p.product).trim() || prodVal === null || prodVal === undefined) {
         missingProduct = true;
         errors.push(`Missing product at line #${idx + 1} (Row ${rowNum}).`);
       }
-      if (!p.qty || p.qty <= 0 || isNaN(Number(p.qty)) || qtyVal === null || qtyVal === undefined || isNaN(Number(qtyVal))) {
+      if (!p.qty || p.qty <= 0 || isNaN(Number(p.qty)) || qtyVal === null || qtyVal === undefined) {
         missingQuantity = true;
         errors.push(`Missing or invalid quantity at line #${idx + 1} (Row ${rowNum}).`);
       }
-      if (p.rate === undefined || p.rate < 0 || isNaN(Number(p.rate)) || priceVal === null || priceVal === undefined || isNaN(Number(priceVal))) {
+      if (p.rate === undefined || p.rate < 0 || isNaN(Number(p.rate)) || priceVal === null || priceVal === undefined) {
         invalidPrice = true;
         errors.push(`Invalid price at line #${idx + 1} (Row ${rowNum}).`);
       }
