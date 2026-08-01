@@ -9,6 +9,7 @@ export interface QuotationEngineMapping {
   priceColumn: number;
   gstColumn?: number;
   amountColumn: number;
+  srNoColumn?: number;
   customerNameCell?: { row: number; col: number };
   addressCell?: { row: number; col: number };
   quotationNumberCell?: { row: number; col: number };

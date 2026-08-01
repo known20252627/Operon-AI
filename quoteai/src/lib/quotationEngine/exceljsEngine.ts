@@ -96,37 +96,91 @@ function getMergedColumnSpans(worksheet: ExcelJS.Worksheet, rowNum: number): Arr
  * Extracts or converts existing template analysis into standard QuotationEngineMapping,
  * with intelligent column collision prevention.
  */
-function toEngineMapping(mapping: ExcelTemplateMapping): QuotationEngineMapping {
+function toEngineMapping(mapping: ExcelTemplateMapping, worksheet?: ExcelJS.Worksheet): QuotationEngineMapping {
   const clientCoords = mapping.clientDetailsCoords || {};
 
-  const productCol = mapping.columns?.product || 1;
-  const amountCol = mapping.columns?.amount || (productCol + 4);
-
+  let productCol = mapping.columns?.product;
+  let amountCol = mapping.columns?.amount;
   let qtyCol = mapping.columns?.qty;
   let priceCol = mapping.columns?.rate;
   let gstCol = mapping.columns?.gst;
+  let srNoCol: number | undefined = undefined;
+  let startRow = mapping.dataStartRowIndex || (mapping.headerRowIndex ? mapping.headerRowIndex + 1 : 12);
 
-  if (!qtyCol || !priceCol || qtyCol === amountCol || priceCol === amountCol || qtyCol === productCol || priceCol === productCol) {
-    if (amountCol > productCol + 2) {
-      priceCol = amountCol - 1;
-      qtyCol = amountCol - 2;
-    } else {
-      qtyCol = productCol + 1;
-      priceCol = productCol + 2;
+  // Absolute Live Spreadsheet Analysis to override any buggy stored mapping coordinates
+  if (worksheet) {
+    let bestMatches = -1;
+    let trueHeaderRowIndex: number | undefined = mapping.headerRowIndex;
+    const liveCols: {
+      srNo?: number;
+      product?: number;
+      sku?: number;
+      qty?: number;
+      rate?: number;
+      gst?: number;
+      amount?: number;
+    } = {};
+
+    for (let r = 1; r <= Math.min(50, worksheet.rowCount || 50); r++) {
+      const row = worksheet.getRow(r);
+      let currentMatches = 0;
+      const tempCols: typeof liveCols = {};
+
+      row.eachCell({ includeEmpty: false }, (cell, colNum) => {
+        const text = getCellText(cell.value).toUpperCase().trim();
+        if (!text) return;
+        if (/^(SR|SL|S\.?\s*NO|NO\.?|SNO|ITEM\s*NO|NO$)/.test(text) && !/GST/i.test(text)) { tempCols.srNo = colNum; currentMatches++; }
+        else if (/^(PRODUCT|ITEM|DESCRIPTION|PARTICULARS|NAME|SPECIFICATION|GOODS|DETAILS)/.test(text)) { tempCols.product = colNum; currentMatches++; }
+        else if (/^(SKU|MODEL|CODE|PART|ITEM\s*CODE)/.test(text)) { tempCols.sku = colNum; currentMatches++; }
+        else if (/^(QTY|QUANTITY|PIECES|UNITS|NOS)/.test(text)) { tempCols.qty = colNum; currentMatches++; }
+        else if (/^(RATE|PRICE|UNIT\s*COST|COST|UNIT\s*PRICE)/.test(text)) { tempCols.rate = colNum; currentMatches++; }
+        else if (/GST|IGST|CGST|SGST|TAX/.test(text) && !/GSTIN|GST\s*NO/.test(text)) { tempCols.gst = colNum; currentMatches++; }
+        else if (/^(AMOUNT|TOTAL|VALUE|NET)/.test(text)) { tempCols.amount = colNum; currentMatches++; }
+      });
+
+      if (currentMatches >= 2 && (tempCols.product !== undefined || tempCols.amount !== undefined) && currentMatches > bestMatches) {
+        bestMatches = currentMatches;
+        trueHeaderRowIndex = r;
+        Object.assign(liveCols, tempCols);
+      }
+    }
+
+    if (bestMatches >= 2 && trueHeaderRowIndex) {
+      startRow = trueHeaderRowIndex + 1;
+      if (liveCols.product !== undefined) productCol = liveCols.product;
+      if (liveCols.qty !== undefined) qtyCol = liveCols.qty;
+      if (liveCols.rate !== undefined) priceCol = liveCols.rate;
+      if (liveCols.amount !== undefined) amountCol = liveCols.amount;
+      if (liveCols.gst !== undefined) gstCol = liveCols.gst;
+      if (liveCols.srNo !== undefined) srNoCol = liveCols.srNo;
     }
   }
 
-  if (gstCol && (gstCol === productCol || gstCol === qtyCol || gstCol === priceCol || gstCol === amountCol)) {
+  const resolvedProductCol = productCol || 1;
+  const resolvedAmountCol = amountCol || (resolvedProductCol + 4);
+
+  if (!qtyCol || !priceCol || qtyCol === resolvedAmountCol || priceCol === resolvedAmountCol || qtyCol === resolvedProductCol || priceCol === resolvedProductCol) {
+    if (resolvedAmountCol > resolvedProductCol + 2) {
+      priceCol = resolvedAmountCol - 1;
+      qtyCol = resolvedAmountCol - 2;
+    } else {
+      qtyCol = resolvedProductCol + 1;
+      priceCol = resolvedProductCol + 2;
+    }
+  }
+
+  if (gstCol && (gstCol === resolvedProductCol || gstCol === qtyCol || gstCol === priceCol || gstCol === resolvedAmountCol)) {
     gstCol = undefined;
   }
 
   return {
-    productStartRow: mapping.dataStartRowIndex || (mapping.headerRowIndex ? mapping.headerRowIndex + 1 : 12),
-    productColumn: productCol,
+    productStartRow: startRow,
+    productColumn: resolvedProductCol,
     qtyColumn: qtyCol!,
     priceColumn: priceCol!,
     gstColumn: gstCol,
-    amountColumn: amountCol,
+    amountColumn: resolvedAmountCol,
+    srNoColumn: srNoCol,
     customerNameCell: clientCoords.nameRow && clientCoords.nameCol ? { row: clientCoords.nameRow, col: clientCoords.nameCol } : undefined,
     addressCell: clientCoords.addressRow && clientCoords.addressCol ? { row: clientCoords.addressRow, col: clientCoords.addressCol } : undefined,
     quotationNumberCell: mapping.quotationNoCoords?.row && mapping.quotationNoCoords?.col ? { row: mapping.quotationNoCoords.row, col: mapping.quotationNoCoords.col } : undefined,
@@ -328,7 +382,7 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     console.log("✨ Merged Engine: Reusing stored template mapping without re-analysis.");
   }
 
-  const engineMapping: QuotationEngineMapping = toEngineMapping(rawMapping);
+  const engineMapping: QuotationEngineMapping = toEngineMapping(rawMapping, worksheet);
 
   // Apply explicit AI coordinates first
   if (engineMapping.customerNameCell) {
@@ -424,9 +478,9 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     }
   }
 
-  // Check if there is a Serial Number column before productColumn on startRow (e.g. Col 1)
-  let serialCol: number | undefined = undefined;
-  if (engineMapping.productColumn > 1) {
+  // Use discovered serial column or check if there is a Serial Number column before productColumn on startRow (e.g. Col 1)
+  let serialCol: number | undefined = engineMapping.srNoColumn;
+  if (!serialCol && engineMapping.productColumn > 1) {
     for (let c = 1; c < engineMapping.productColumn; c++) {
       const val = getCellText(sampleRefRow.getCell(c).value);
       if (/^#?\s*0*1\s*$/.test(val) || c === 1) {
