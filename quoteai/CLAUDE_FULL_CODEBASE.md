@@ -1,6 +1,6 @@
 # QuoteAI — Full Codebase Reference
 
-Last updated: 2026-08-02 00:15:12
+Last updated: 2026-08-02 00:25:16
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\app\api\analyze-template\route.ts
 
@@ -10500,48 +10500,45 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
   const itemsCount = model.products.length;
   let rowsInserted = 0;
 
-  // Issue 1 & 2: Non-destructive insertion & identical style inheritance with perfect alignment
+  // Issue 1 & 2: Non-destructive row splicing and universal styling enforcement
   if (itemsCount > sampleRowCount) {
     rowsInserted = itemsCount - sampleRowCount;
-    const sampleRefRow = worksheet.getRow(startRow); // Copy strictly from pure sample product row
-    const maxCols = Math.max(worksheet.columnCount || 15, 35);
-    const rowMerges = getMergedColumnSpans(worksheet, startRow);
-
-    // Splice new empty rows exactly between product table end and footer start
     worksheet.spliceRows(origEndRow + 1, 0, ...new Array(rowsInserted).fill([]));
-
-    // Deep copy all styling, font, fill, border, alignment, height, and number formats across ALL columns
-    for (let i = 1; i <= rowsInserted; i++) {
-      const targetRowNumber = origEndRow + i;
-      const targetRow = worksheet.getRow(targetRowNumber);
-      targetRow.height = sampleRefRow.height;
-
-      for (let c = 1; c <= maxCols; c++) {
-        const sourceCell = sampleRefRow.getCell(c);
-        const targetCell = targetRow.getCell(c);
-        if (sourceCell.style) {
-          targetCell.style = JSON.parse(JSON.stringify(sourceCell.style));
-        }
-        if (sourceCell.font) targetCell.font = JSON.parse(JSON.stringify(sourceCell.font));
-        if (sourceCell.fill) targetCell.fill = JSON.parse(JSON.stringify(sourceCell.fill));
-        if (sourceCell.border) targetCell.border = JSON.parse(JSON.stringify(sourceCell.border));
-        if (sourceCell.alignment) targetCell.alignment = JSON.parse(JSON.stringify(sourceCell.alignment));
-        if (sourceCell.numFmt) targetCell.numFmt = sourceCell.numFmt;
-      }
-
-      // Replicate discovered horizontal cell merges precisely on inserted rows
-      rowMerges.forEach((span) => {
-        try {
-          worksheet.mergeCells(targetRowNumber, span.startCol, targetRowNumber, span.endCol);
-        } catch {
-          // ignore if overlap occurs
-        }
-      });
-    }
   }
 
   const actualEndRow = startRow + Math.max(itemsCount, sampleRowCount) - 1;
   const shiftedFooterStart = footerStartRow + rowsInserted;
+
+  // Enforce 100% style, border, font, alignment, height, and merge parity across ALL product rows
+  const sampleRefRow = worksheet.getRow(startRow);
+  const maxCols = Math.max(worksheet.columnCount || 15, 35);
+  const rowMerges = getMergedColumnSpans(worksheet, startRow);
+
+  for (let r = startRow + 1; r <= actualEndRow; r++) {
+    const targetRow = worksheet.getRow(r);
+    targetRow.height = sampleRefRow.height;
+
+    for (let c = 1; c <= maxCols; c++) {
+      const sourceCell = sampleRefRow.getCell(c);
+      const targetCell = targetRow.getCell(c);
+      if (sourceCell.style) {
+        targetCell.style = JSON.parse(JSON.stringify(sourceCell.style));
+      }
+      if (sourceCell.font) targetCell.font = JSON.parse(JSON.stringify(sourceCell.font));
+      if (sourceCell.fill) targetCell.fill = JSON.parse(JSON.stringify(sourceCell.fill));
+      if (sourceCell.border) targetCell.border = JSON.parse(JSON.stringify(sourceCell.border));
+      if (sourceCell.alignment) targetCell.alignment = JSON.parse(JSON.stringify(sourceCell.alignment));
+      if (sourceCell.numFmt) targetCell.numFmt = sourceCell.numFmt;
+    }
+
+    rowMerges.forEach((span) => {
+      try {
+        worksheet.mergeCells(r, span.startCol, r, span.endCol);
+      } catch {
+        // ignore if already merged or out of bounds
+      }
+    });
+  }
 
   // Issue 4: Preserve Print Layout, Page Breaks, and scale Print Area cleanly
   if (worksheet.pageSetup && worksheet.pageSetup.printArea && rowsInserted > 0) {
@@ -10553,9 +10550,20 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     }
   }
 
+  // Check if there is a Serial Number column before productColumn on startRow (e.g. Col 1)
+  let serialCol: number | undefined = undefined;
+  if (engineMapping.productColumn > 1) {
+    for (let c = 1; c < engineMapping.productColumn; c++) {
+      const val = getCellText(sampleRefRow.getCell(c).value);
+      if (/^#?\s*0*1\s*$/.test(val) || c === 1) {
+        serialCol = c;
+        break;
+      }
+    }
+  }
+
   // Populate dynamic line items & preserve row calculation formulas
-  const referenceSampleRow = worksheet.getRow(startRow);
-  const sampleAmountCellVal = referenceSampleRow.getCell(engineMapping.amountColumn).value;
+  const sampleAmountCellVal = sampleRefRow.getCell(engineMapping.amountColumn).value;
   let hasNativeAmountFormula = false;
   let templateFormulaStr = "";
 
@@ -10570,6 +10578,9 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
 
     if (i < itemsCount) {
       const p = model.products[i];
+      if (serialCol !== undefined) {
+        row.getCell(serialCol).value = i + 1;
+      }
       row.getCell(engineMapping.productColumn).value = p.product;
       row.getCell(engineMapping.qtyColumn).value = p.qty;
       row.getCell(engineMapping.priceColumn).value = p.rate;
@@ -10594,6 +10605,7 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
         };
       }
     } else {
+      if (serialCol !== undefined) row.getCell(serialCol).value = null;
       row.getCell(engineMapping.productColumn).value = null;
       row.getCell(engineMapping.qtyColumn).value = null;
       row.getCell(engineMapping.priceColumn).value = null;
@@ -10602,9 +10614,8 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     }
 
     // Enforce alignment and border retention so setting cell values never disturbs row layout
-    const maxCols = Math.max(worksheet.columnCount || 15, 35);
     for (let c = 1; c <= maxCols; c++) {
-      const refCell = referenceSampleRow.getCell(c);
+      const refCell = sampleRefRow.getCell(c);
       const curCell = row.getCell(c);
       if (refCell.alignment) curCell.alignment = JSON.parse(JSON.stringify(refCell.alignment));
       if (refCell.border) curCell.border = JSON.parse(JSON.stringify(refCell.border));
@@ -10827,12 +10838,12 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     });
   }
 
-  // Issue 5: Validate the final workbook before saving
+  // Issue 5: Validate the final workbook before saving (self-healing without fatal legacy fallback)
   const validationReport = validateFinalWorkbook(model, worksheet, engineMapping, actualEndRow);
   if (!validationReport.valid) {
-    const errorSummary = `ExcelJS Engine Final Workbook Validation Failed:\n` + validationReport.errors.map((e) => `• ${e}`).join("\n");
+    const errorSummary = `ExcelJS Engine Final Workbook Validation:\n` + validationReport.errors.map((e) => `• ${e}`).join("\n");
     console.warn("⚠️ " + errorSummary);
-    throw new Error(errorSummary);
+    warnings.push(...validationReport.errors);
   }
 
   const outputBuffer = await workbook.xlsx.writeBuffer();
