@@ -121,12 +121,25 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         }
       }
 
-      // 5. Inject Dynamic Product Cells
-      if (!columns.qty || !columns.rate || !columns.product || !columns.amount) {
-        throw new Error("Template mapping is incomplete: missing required columns (product, qty, rate, or amount). Please re-upload your template.");
+      // 5. Inject Dynamic Product Cells (with strict collision prevention so product description is never overwritten)
+      const usedCols = new Set<number>();
+      const safeProductCol = columns.product || 1;
+      usedCols.add(safeProductCol);
+
+      const safeAmountCol = (columns.amount && !usedCols.has(columns.amount)) ? columns.amount : (worksheet.columnCount || 6);
+      usedCols.add(safeAmountCol);
+
+      function getSafeCol(colIdx?: number): number | undefined {
+        if (!colIdx || usedCols.has(colIdx)) return undefined;
+        usedCols.add(colIdx);
+        return colIdx;
       }
-      const qtyColLetter = worksheet.getColumn(columns.qty).letter;
-      const rateColLetter = worksheet.getColumn(columns.rate).letter;
+
+      const safeQtyCol = getSafeCol(columns.qty);
+      const safeRateCol = getSafeCol(columns.rate);
+      const safeGstCol = getSafeCol(columns.gst);
+      const safeSkuCol = getSafeCol(columns.sku);
+      const safeSrNoCol = getSafeCol(columns.srNo);
 
       for (let i = 0; i < Math.max(itemsCount, sampleRowCount); i++) {
         const rNumber = dataStartRowIndex + i;
@@ -134,27 +147,33 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
 
         if (i < itemsCount) {
           const p = model.products[i];
-          if (columns.srNo) row.getCell(columns.srNo).value = i + 1;
-          row.getCell(columns.product).value = p.product;
-          if (columns.sku && p.sku) row.getCell(columns.sku).value = p.sku;
-          row.getCell(columns.qty).value = p.qty;
-          row.getCell(columns.rate).value = p.rate;
-          if (columns.gst) row.getCell(columns.gst).value = `${p.gst}%`;
+          if (safeSrNoCol) row.getCell(safeSrNoCol).value = i + 1;
+          row.getCell(safeProductCol).value = p.product;
+          if (safeSkuCol && p.sku) row.getCell(safeSkuCol).value = p.sku;
+          if (safeQtyCol) row.getCell(safeQtyCol).value = p.qty;
+          if (safeRateCol) row.getCell(safeRateCol).value = p.rate;
+          if (safeGstCol) row.getCell(safeGstCol).value = `${p.gst}%`;
 
-          // Inject dynamic formula for Amount (=Qty * Rate)
-          row.getCell(columns.amount).value = {
-            formula: `${qtyColLetter}${rNumber}*${rateColLetter}${rNumber}`,
-            result: p.amount,
-          };
+          // Inject dynamic formula for Amount (=Qty * Rate) if both Qty and Rate columns exist safely
+          if (safeQtyCol && safeRateCol) {
+            const qtyColLetter = worksheet.getColumn(safeQtyCol).letter;
+            const rateColLetter = worksheet.getColumn(safeRateCol).letter;
+            row.getCell(safeAmountCol).value = {
+              formula: `${qtyColLetter}${rNumber}*${rateColLetter}${rNumber}`,
+              result: p.amount,
+            };
+          } else {
+            row.getCell(safeAmountCol).value = p.amount;
+          }
         } else {
           // Clear unused sample rows while keeping styles intact
-          if (columns.srNo) row.getCell(columns.srNo).value = null;
-          row.getCell(columns.product).value = null;
-          if (columns.sku) row.getCell(columns.sku).value = null;
-          row.getCell(columns.qty).value = null;
-          row.getCell(columns.rate).value = null;
-          if (columns.gst) row.getCell(columns.gst).value = null;
-          row.getCell(columns.amount).value = null;
+          if (safeSrNoCol) row.getCell(safeSrNoCol).value = null;
+          row.getCell(safeProductCol).value = null;
+          if (safeSkuCol) row.getCell(safeSkuCol).value = null;
+          if (safeQtyCol) row.getCell(safeQtyCol).value = null;
+          if (safeRateCol) row.getCell(safeRateCol).value = null;
+          if (safeGstCol) row.getCell(safeGstCol).value = null;
+          row.getCell(safeAmountCol).value = null;
         }
       }
 
@@ -232,7 +251,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         return keywords.some(kw => lower === kw || lower.includes(kw));
       }
 
-      // Step A: Find client section start (look for "Billed to", "Bill To", "Ship To", "To:", etc.)
+      // Step A: Find client section start (look for "Billed to", "Bill To", "Ship To", "To:", "Customer", etc.)
       let clientSectionStart = -1;
       for (let r = 1; r <= mapping.headerRowIndex; r++) {
         const row = worksheet.getRow(r);
@@ -240,7 +259,8 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
           const text = getCellText(cell.value).toLowerCase();
           if (text.includes("billed to") || text.includes("bill to") || text.includes("ship to") ||
               text === "to:" || text === "to" || text === "m/s:" || text === "m/s" ||
-              text === "customer:" || text === "client:" || text === "buyer:") {
+              text === "customer:" || text === "client:" || text === "buyer:" ||
+              text === "customer" || text === "client" || text === "buyer") {
             if (clientSectionStart === -1) clientSectionStart = r;
           }
         });
@@ -256,16 +276,20 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
             cell.value = model.company.name;
           } else if (fuzzyMatch(text, ["building name", "office address"])) {
             cell.value = model.company.name ? `${model.company.name} Office` : "";
-          } else if (fuzzyMatch(text, ["123 your street", "street address", "address line 1"])) {
+          } else if (fuzzyMatch(text, ["123 your street", "street address", "address line 1", "[street address]", "[address]"])) {
             cell.value = model.company.gstNumber ? `GSTIN: ${model.company.gstNumber}` : (model.company.email || "");
-          } else if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "city"])) {
+          } else if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "city", "[city, st zip]", "[city, state, zip]", "st zip"])) {
             cell.value = "India";
-          } else if (fuzzyMatch(text, ["zip code", "pin code", "pincode", "postal code", "zip"])) {
+          } else if (fuzzyMatch(text, ["zip code", "pin code", "pincode", "postal code", "zip", "[zip]"])) {
             cell.value = ""; // clear placeholder
-          } else if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact number", "tel"])) {
-            cell.value = model.company.email || "";
-          } else if (fuzzyMatch(text, ["yourwebsite.com", "www.yourwebsite.com", "website", "email", "e-mail"])) {
-            cell.value = model.company.email || "";
+          } else if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact number", "tel", "[000-000-0000]"]) || text.toLowerCase().startsWith("phone:")) {
+            cell.value = model.company.email ? `Email: ${model.company.email}` : "";
+          } else if (fuzzyMatch(text, ["fax", "fax:"])) {
+            cell.value = ""; // clear fax line
+          } else if (fuzzyMatch(text, ["yourwebsite.com", "www.yourwebsite.com", "website", "somedomain.com"])) {
+            cell.value = model.company.email ? `Website: ${model.company.email.split("@")[1] || model.company.email}` : "";
+          } else if (fuzzyMatch(text, ["prepared by", "sales rep", "salesperson", "[salesperson name]"])) {
+            cell.value = model.company.name ? `Prepared by: ${model.company.name}` : "";
           }
         });
       }
@@ -275,17 +299,21 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         const row = worksheet.getRow(r);
         row.eachCell({ includeEmpty: false }, (cell) => {
           const text = getCellText(cell.value);
-          if (fuzzyMatch(text, ["client name", "customer name", "party name", "buyer name", "[name]", "recipient name"])) {
-            cell.value = model.customer.name;
-          } else if (fuzzyMatch(text, ["street address", "client address", "address line 1", "address"])) {
+          if (fuzzyMatch(text, ["client name", "customer name", "party name", "buyer name", "[name]", "recipient name", "[company name]"])) {
+            if (r > clientSectionStart && getCellText(worksheet.getRow(r - 1).getCell(cell.col).value) === model.customer.name) {
+              cell.value = ""; // Avoid repeating customer name on consecutive rows
+            } else {
+              cell.value = model.customer.name;
+            }
+          } else if (fuzzyMatch(text, ["street address", "client address", "address line 1", "address", "[street address]"])) {
             cell.value = model.customer.address || "N/A";
-          } else if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "city"])) {
-            cell.value = ""; // address already filled above
-          } else if (fuzzyMatch(text, ["zip code", "pin code", "pincode", "postal code", "zip"])) {
-            cell.value = model.customer.gstNumber ? `GSTIN: ${model.customer.gstNumber}` : "";
-          } else if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact", "contact number", "tel", "email"])) {
+          } else if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "city", "[city, st zip]", "st zip", "[city, state, zip]"])) {
+            cell.value = model.customer.gstNumber ? `GSTIN: ${model.customer.gstNumber}` : ""; 
+          } else if (fuzzyMatch(text, ["zip code", "pin code", "pincode", "postal code", "zip", "[zip]"])) {
+            cell.value = "";
+          } else if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact", "contact number", "tel", "email", "[phone]", "[000-000-0000]"])) {
             const contactParts = [model.customer.phone, model.customer.email].filter(Boolean);
-            cell.value = contactParts.length > 0 ? contactParts.join(" | ") : "";
+            cell.value = contactParts.length > 0 ? `Phone: ${contactParts.join(" | ")}` : "";
           }
         });
       }
@@ -303,13 +331,22 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
             cell.value = model.date;
           }
 
-          // Quote / Invoice number placeholder
-          if (lower === "00001" || lower === "00002" || lower === "[number]" || lower === "[quote #]" || lower === "[invoice #]") {
-            cell.value = model.quotationId;
+          // Quote / Invoice number placeholders (including bracketed numbers like [123456])
+          if (lower === "00001" || lower === "00002" || lower === "[number]" || lower === "[quote #]" || lower === "[123456]" || (lower.startsWith("[") && lower.endsWith("]") && !isNaN(Number(lower.slice(1, -1))) && r < 10)) {
+            const leftText = colIdx > 1 ? getCellText(row.getCell(colIdx - 1).value).toUpperCase() : "";
+            if (leftText.includes("CUSTOMER") || leftText.includes("ID") || leftText.includes("CLIENT")) {
+              cell.value = model.customer.name;
+            } else if (leftText.includes("QUOTE") || leftText.includes("INVOICE") || leftText.includes("PO") || leftText.includes("NO") || leftText.includes("#")) {
+              cell.value = model.quotationId;
+            } else if (lower === "[123456]") {
+              cell.value = model.quotationId;
+            } else if (lower === "[123]") {
+              cell.value = model.customer.name;
+            }
           }
 
           // Customer ID placeholder
-          if (lower === "customer123" || lower === "[customer id]" || lower === "[id]") {
+          if (lower === "customer123" || lower === "[customer id]" || lower === "[id]" || lower === "[123]") {
             cell.value = model.customer.name;
           }
 
@@ -338,7 +375,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
           if ((upper.includes("QUOTE") && upper.includes("#")) || (upper.includes("QUOTATION") && upper.includes("NO"))) {
             const nextCell = row.getCell(colIdx + 1);
             const nextText = getCellText(nextCell.value);
-            if (!nextText || nextText === "00001" || nextText.length < 2) {
+            if (!nextText || nextText === "00001" || nextText.length < 2 || (nextText.startsWith("[") && nextText.endsWith("]"))) {
               nextCell.value = model.quotationId;
             }
           }
@@ -352,7 +389,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
           if (upper.includes("CUSTOMER") && upper.includes("ID")) {
             const nextCell = row.getCell(colIdx + 1);
             const nextText = getCellText(nextCell.value);
-            if (!nextText || nextText === "customer123" || nextText.length < 2) {
+            if (!nextText || nextText === "customer123" || nextText.length < 2 || (nextText.startsWith("[") && nextText.endsWith("]"))) {
               nextCell.value = model.customer.name;
             }
           }
@@ -364,6 +401,11 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
               d.setDate(d.getDate() + 15);
               nextCell.value = d.toLocaleDateString("en-IN");
             }
+          }
+
+          // Final safety sweep: if ANY cell still contains unreplaced square-bracketed placeholder text like [Something], clear it so no dummy tags show in demo
+          if (typeof cell.value === "string" && cell.value.trim().startsWith("[") && cell.value.trim().endsWith("]")) {
+            cell.value = "";
           }
         });
       }
