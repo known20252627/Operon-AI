@@ -197,7 +197,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         }
       }
 
-      // 5. Safe Product Injection using verified live spreadsheet columns
+      // 5. Safe Product Injection & Template Sample Row Wipe
       const safeProductCol = liveCols.product || mapping.columns.product || 1;
       const safeAmountCol = liveCols.amount || (mapping.columns.amount !== safeProductCol ? mapping.columns.amount : undefined) || worksheet.columnCount || 6;
       
@@ -215,19 +215,15 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
           const p = model.products[i];
           if (safeSrNoCol && safeSrNoCol !== safeProductCol) row.getCell(safeSrNoCol).value = i + 1;
 
-          let displayText = p.product;
-          if (!safeQtyCol || !safeRateCol) {
-            const details = [];
-            if (!safeQtyCol && p.qty !== undefined) details.push(`Qty: ${p.qty}`);
-            if (!safeRateCol && p.rate !== undefined) details.push(`Rate: ₹${p.rate}`);
-            if (details.length > 0) displayText += ` (${details.join(", ")})`;
-          }
-          row.getCell(safeProductCol).value = displayText;
+          // Pure, unpolluted product description
+          row.getCell(safeProductCol).value = p.product;
 
           if (safeSkuCol && safeSkuCol !== safeProductCol) row.getCell(safeSkuCol).value = p.sku;
           if (safeQtyCol && safeQtyCol !== safeProductCol) row.getCell(safeQtyCol).value = p.qty;
           if (safeRateCol && safeRateCol !== safeProductCol) row.getCell(safeRateCol).value = p.rate;
-          if (safeGstCol && safeGstCol !== safeProductCol && safeGstCol !== safeAmountCol) row.getCell(safeGstCol).value = `${p.gst}%`;
+          if (safeGstCol && safeGstCol !== safeProductCol && safeGstCol !== safeAmountCol) {
+            row.getCell(safeGstCol).value = p.gst ? `${p.gst}%` : "x";
+          }
 
           if (safeQtyCol && safeRateCol) {
             const qtyColLetter = worksheet.getColumn(safeQtyCol).letter;
@@ -240,13 +236,10 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
             row.getCell(safeAmountCol).value = p.amount;
           }
         } else {
-          if (safeSrNoCol) row.getCell(safeSrNoCol).value = null;
-          row.getCell(safeProductCol).value = null;
-          if (safeSkuCol) row.getCell(safeSkuCol).value = null;
-          if (safeQtyCol) row.getCell(safeQtyCol).value = null;
-          if (safeRateCol) row.getCell(safeRateCol).value = null;
-          if (safeGstCol) row.getCell(safeGstCol).value = null;
-          row.getCell(safeAmountCol).value = null;
+          // Thoroughly wipe all dummy template sample cells in unused rows across columns 1 to 25
+          for (let c = 1; c <= Math.max(worksheet.columnCount || 10, 25); c++) {
+            row.getCell(c).value = null;
+          }
         }
       }
 
@@ -277,130 +270,94 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         totRow.getCell(mapping.totals.valueColumnIndex).value = model.totals.payable;
       }
 
-      // 7. Section-Aware Placeholder Scanner
-      console.log("=== TEMPLATE DEBUG: Header area cells ===");
-      console.log("headerRowIndex =", headerRowIndex);
-      for (let r = 1; r <= Math.min(headerRowIndex + 2, worksheet.rowCount || 50); r++) {
-        const row = worksheet.getRow(r);
-        const cells: string[] = [];
-        row.eachCell({ includeEmpty: false }, (cell, colIdx) => {
-          const text = getCellText(cell.value);
-          if (text) cells.push(`Col${colIdx}="${text.substring(0, 40)}"`);
-        });
-        if (cells.length > 0) console.log(`  R${r}: ${cells.join(" | ")}`);
-      }
-      console.log("=== END DEBUG ===")
-
-      // Step A: Find client section start
-      let clientSectionStart = -1;
-      for (let r = 1; r <= headerRowIndex; r++) {
-        const row = worksheet.getRow(r);
-        row.eachCell({ includeEmpty: false }, (cell) => {
-          const text = getCellText(cell.value).toLowerCase();
-          if (text.includes("billed to") || text.includes("bill to") || text.includes("ship to") ||
-              text === "to:" || text === "to" || text === "m/s:" || text === "m/s" ||
-              text === "customer:" || text === "client:" || text === "buyer:" ||
-              text === "customer" || text === "client" || text === "buyer") {
-            if (clientSectionStart === -1) clientSectionStart = r;
-          }
-        });
-      }
-      if (clientSectionStart === -1) clientSectionStart = Math.max(1, Math.floor(headerRowIndex / 2));
-      
-      // Step B: Replace COMPANY placeholders
-      for (let r = 1; r < clientSectionStart; r++) {
-        const row = worksheet.getRow(r);
-        row.eachCell({ includeEmpty: false }, (cell) => {
-          const text = getCellText(cell.value);
-          if (fuzzyMatch(text, ["your company name", "company name", "your company"])) {
-            cell.value = model.company.name;
-          } else if (fuzzyMatch(text, ["building name", "office address"])) {
-            cell.value = model.company.name ? `${model.company.name} Office` : "";
-          } else if (fuzzyMatch(text, ["123 your street", "street address", "address line 1", "[street address]", "[address]"])) {
-            cell.value = model.company.gstNumber ? `GSTIN: ${model.company.gstNumber}` : (model.company.email || "");
-          } else if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "city", "[city, st zip]", "[city, state, zip]", "st zip"])) {
-            cell.value = "India";
-          } else if (fuzzyMatch(text, ["zip code", "pin code", "pincode", "postal code", "zip", "[zip]"])) {
-            cell.value = "";
-          } else if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact number", "tel", "[000-000-0000]"]) || text.toLowerCase().startsWith("phone:")) {
-            cell.value = model.company.email ? `Email: ${model.company.email}` : "";
-          } else if (fuzzyMatch(text, ["fax", "fax:"])) {
-            cell.value = "";
-          } else if (fuzzyMatch(text, ["yourwebsite.com", "www.yourwebsite.com", "website", "somedomain.com"])) {
-            cell.value = model.company.email ? `Website: ${model.company.email.split("@")[1] || model.company.email}` : "";
-          } else if (fuzzyMatch(text, ["prepared by", "sales rep", "salesperson", "[salesperson name]"])) {
-            cell.value = model.company.name ? `Prepared by: ${model.company.name}` : "";
-          }
-        });
-      }
-
-      // Step C: Replace CLIENT placeholders
-      for (let r = clientSectionStart; r <= headerRowIndex; r++) {
-        const row = worksheet.getRow(r);
-        row.eachCell({ includeEmpty: false }, (cell) => {
-          const text = getCellText(cell.value);
-          if (fuzzyMatch(text, ["client name", "customer name", "party name", "buyer name", "[name]", "recipient name", "[company name]"])) {
-            if (r > clientSectionStart && getCellText(worksheet.getRow(r - 1).getCell(cell.col).value) === model.customer.name) {
-              cell.value = "";
-            } else {
-              cell.value = model.customer.name;
-            }
-          } else if (fuzzyMatch(text, ["street address", "client address", "address line 1", "address", "[street address]"])) {
-            cell.value = model.customer.address || "N/A";
-          } else if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "city", "[city, st zip]", "st zip", "[city, state, zip]"])) {
-            cell.value = model.customer.gstNumber ? `GSTIN: ${model.customer.gstNumber}` : ""; 
-          } else if (fuzzyMatch(text, ["zip code", "pin code", "pincode", "postal code", "zip", "[zip]"])) {
-            cell.value = "";
-          } else if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact", "contact number", "tel", "email", "[phone]", "[000-000-0000]"])) {
-            const contactParts = [model.customer.phone, model.customer.email].filter(Boolean);
-            cell.value = contactParts.length > 0 ? `Phone: ${contactParts.join(" | ")}` : "";
-          }
-        });
-      }
-
-      // Step D: Replace UNIVERSAL placeholders
+      // 7. Comprehensive Section & Placeholder Scanner
       for (let r = 1; r <= (worksheet.rowCount || 100); r++) {
         const row = worksheet.getRow(r);
+        const isHeaderArea = r < headerRowIndex;
+        const isCompanySection = r <= Math.max(6, Math.floor(headerRowIndex / 2) - 1);
+
         row.eachCell({ includeEmpty: false }, (cell, colIdx) => {
           const text = getCellText(cell.value);
+          if (!text) return;
+
           const lower = text.toLowerCase().trim();
           const upper = text.toUpperCase().trim();
 
-          if (lower === "mm/dd/yyyy" || lower === "dd/mm/yyyy" || lower === "yyyy-mm-dd" || lower === "[date]") {
-            cell.value = model.date;
+          // ── COMPANY PLACEHOLDERS (Rows 1 to Company boundary) ──
+          if (isCompanySection) {
+            if (fuzzyMatch(text, ["your company name", "company name", "your company", "[company name]"])) {
+              cell.value = model.company.name;
+              return;
+            }
+            if (fuzzyMatch(text, ["123 your street", "street address", "address line 1", "[street address]", "[address]"])) {
+              cell.value = model.company.gstNumber ? `GSTIN: ${model.company.gstNumber}` : (model.company.email || "");
+              return;
+            }
+            if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "[city, st zip]", "[city, state, zip]", "st zip"])) {
+              cell.value = "India";
+              return;
+            }
+            if (fuzzyMatch(text, ["phone", "phone number", "[000-000-0000]", "[phone]"]) || lower.startsWith("phone:")) {
+              cell.value = model.company.email ? `Email: ${model.company.email}` : "";
+              return;
+            }
+            if (fuzzyMatch(text, ["yourwebsite.com", "www.yourwebsite.com", "website", "somedomain.com"])) {
+              cell.value = model.company.email ? `Website: ${model.company.email.split("@")[1] || model.company.email}` : "";
+              return;
+            }
           }
 
-          if (lower === "00001" || lower === "00002" || lower === "[number]" || lower === "[quote #]" || lower === "[123456]" || (lower.startsWith("[") && lower.endsWith("]") && !isNaN(Number(lower.slice(1, -1))) && r < 10)) {
-            const leftText = colIdx > 1 ? getCellText(row.getCell(colIdx - 1).value).toUpperCase() : "";
-            if (leftText.includes("CUSTOMER") || leftText.includes("ID") || leftText.includes("CLIENT")) {
+          // ── CLIENT / CUSTOMER PLACEHOLDERS (Header area below company boundary) ──
+          if (isHeaderArea && !isCompanySection) {
+            if (fuzzyMatch(text, ["client name", "customer name", "party name", "buyer name", "[name]", "recipient name", "[company name]"])) {
               cell.value = model.customer.name;
-            } else if (leftText.includes("QUOTE") || leftText.includes("INVOICE") || leftText.includes("PO") || leftText.includes("NO") || leftText.includes("#")) {
-              cell.value = model.quotationId;
-            } else if (lower === "[123456]") {
-              cell.value = model.quotationId;
-            } else if (lower === "[123]") {
-              cell.value = model.customer.name;
+              return;
             }
+            if (fuzzyMatch(text, ["street address", "client address", "address line 1", "address", "[street address]"])) {
+              cell.value = model.customer.address || "N/A";
+              return;
+            }
+            if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "[city, st zip]", "st zip", "[city, state, zip]"])) {
+              cell.value = model.customer.gstNumber ? `GSTIN: ${model.customer.gstNumber}` : "";
+              return;
+            }
+            if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact", "tel", "email", "[phone]", "[000-000-0000]"])) {
+              const contactParts = [model.customer.phone, model.customer.email].filter(Boolean);
+              cell.value = contactParts.length > 0 ? `Phone: ${contactParts.join(" | ")}` : "";
+              return;
+            }
+          }
+
+          // ── UNIVERSAL PLACEHOLDERS (Date, Quote #, Customer ID, Terms) ──
+          if (lower === "mm/dd/yyyy" || lower === "dd/mm/yyyy" || lower === "yyyy-mm-dd" || lower === "[date]") {
+            cell.value = model.date;
+            return;
+          }
+
+          if (lower === "00001" || lower === "00002" || lower === "[number]" || lower === "[quote #]" || lower === "[123456]") {
+            cell.value = model.quotationId;
+            return;
           }
 
           if (lower === "customer123" || lower === "[customer id]" || lower === "[id]" || lower === "[123]") {
             cell.value = model.customer.name;
+            return;
+          }
+
+          if (fuzzyMatch(text, ["prepared by", "sales rep", "salesperson", "[salesperson name]"])) {
+            cell.value = model.company.name ? `Prepared by: ${model.company.name}` : "";
+            return;
           }
 
           if (r > headerRowIndex) {
             if (fuzzyMatch(text, ["enter your terms", "terms and conditions here", "special notes and instructions", "thank you for your business"])) {
-              if (lower === "notes:" || lower === "terms:") {
-                const nextCell = row.getCell(colIdx + 1);
-                if (!nextCell.value || getCellText(nextCell.value).length < 5) {
-                  nextCell.value = brand.terms || "Thank you for your business!";
-                }
-              } else {
-                cell.value = brand.terms || "Thank you for your business!";
-              }
+              cell.value = brand.terms || "Thank you for your business!";
+              return;
             }
           }
 
-          if (upper === "DATE:" || (upper === "DATE" && r < clientSectionStart)) {
+          // Label + Value patterns (put data in NEXT cell if empty or placeholder)
+          if (upper === "DATE:" || (upper === "DATE" && isHeaderArea)) {
             const nextCell = row.getCell(colIdx + 1);
             const nextText = getCellText(nextCell.value).toLowerCase();
             if (!nextText || nextText === "mm/dd/yyyy" || nextText === "dd/mm/yyyy" || nextText.length < 3) {
@@ -414,13 +371,6 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
               nextCell.value = model.quotationId;
             }
           }
-          if (upper.includes("PURCHASE ORDER") && upper.includes("#")) {
-            const nextCell = row.getCell(colIdx + 1);
-            const nextText = getCellText(nextCell.value);
-            if (!nextText || nextText === "00002" || nextText.length < 2) {
-              nextCell.value = model.quotationId;
-            }
-          }
           if (upper.includes("CUSTOMER") && upper.includes("ID")) {
             const nextCell = row.getCell(colIdx + 1);
             const nextText = getCellText(nextCell.value);
@@ -428,18 +378,10 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
               nextCell.value = model.customer.name;
             }
           }
-          if (upper.includes("PAYMENT DUE BY") || upper.includes("DUE DATE")) {
-            const nextCell = row.getCell(colIdx + 1);
-            const nextText = getCellText(nextCell.value).toLowerCase();
-            if (!nextText || nextText === "mm/dd/yyyy" || nextText === "dd/mm/yyyy" || nextText.length < 3) {
-              const d = new Date();
-              d.setDate(d.getDate() + 15);
-              nextCell.value = d.toLocaleDateString("en-IN");
-            }
-          }
 
+          // Final cleanup sweep: if cell text is still a bracketed placeholder like [Something], clear it
           if (typeof cell.value === "string" && cell.value.trim().startsWith("[") && cell.value.trim().endsWith("]")) {
-            cell.value = "";
+            cell.value = null;
           }
         });
       }
