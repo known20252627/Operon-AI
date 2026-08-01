@@ -84,175 +84,6 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         throw new Error("No worksheet found in custom template.");
       }
 
-      // Ensure we have template mapping
-      let mapping: ExcelTemplateMapping | undefined = brand.customExcelMapping;
-      if (!mapping) {
-        mapping = await analyzeExcelTemplate(brand.customExcelTemplate);
-      }
-
-      const { dataStartRowIndex, dataEndRowIndex, columns, totals } = mapping;
-      const sampleRowCount = Math.max(1, dataEndRowIndex - dataStartRowIndex + 1);
-      const itemsCount = model.products.length;
-
-      // 4. Dynamic Row Insertion while preserving 100% formatting
-      let rowOffset = 0;
-      if (itemsCount > sampleRowCount) {
-        const rowsToInsert = itemsCount - sampleRowCount;
-        rowOffset = rowsToInsert;
-
-        // Clone cell styles from the last sample row
-        const sampleRowNumber = dataEndRowIndex;
-        const sampleRow = worksheet.getRow(sampleRowNumber);
-
-        // Splice empty rows right below dataEndRowIndex
-        worksheet.spliceRows(sampleRowNumber + 1, 0, ...new Array(rowsToInsert).fill([]));
-
-        // Copy styles and height to newly inserted rows
-        for (let i = 1; i <= rowsToInsert; i++) {
-          const targetRowNumber = sampleRowNumber + i;
-          const targetRow = worksheet.getRow(targetRowNumber);
-          targetRow.height = sampleRow.height;
-
-          sampleRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
-            const targetCell = targetRow.getCell(colIdx);
-            targetCell.style = Object.assign({}, cell.style);
-            if (cell.numFmt) targetCell.numFmt = cell.numFmt;
-          });
-        }
-      }
-
-      // 5. Real-Time Table Header Discovery & Safe Product Injection
-      // Directly inspect the actual worksheet header row to find real column indices, overriding any buggy stored mappings.
-      const discoveredCols: {
-        srNo?: number;
-        product?: number;
-        sku?: number;
-        qty?: number;
-        rate?: number;
-        gst?: number;
-        amount?: number;
-      } = {};
-
-      const headerRow = worksheet.getRow(mapping.headerRowIndex || 16);
-      headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
-        const text = String(cell.value || "").toUpperCase().trim();
-        if (/^(SR|SL|S\.?\s*NO|NO\.|SR\.\s*NO|SL\.\s*NO|SNO)/.test(text)) discoveredCols.srNo = colNumber;
-        else if (/^(PRODUCT|ITEM|DESCRIPTION|PARTICULARS|NAME|SPECIFICATION|GOODS|DETAILS)/.test(text)) discoveredCols.product = colNumber;
-        else if (/^(SKU|MODEL|CODE|PART|ITEM\s*CODE)/.test(text)) discoveredCols.sku = colNumber;
-        else if (/^(QTY|QUANTITY|PIECES|UNITS|NOS)/.test(text)) discoveredCols.qty = colNumber;
-        else if (/^(RATE|PRICE|UNIT\s*COST|COST|UNIT\s*PRICE)/.test(text)) discoveredCols.rate = colNumber;
-        else if (/^(GST|TAX|TAXED|TAXABLE|IGST|CGST|SGST|GST\s*%)/.test(text)) discoveredCols.gst = colNumber;
-        else if (/^(AMOUNT|TOTAL|VALUE|NET)/.test(text)) discoveredCols.amount = colNumber;
-      });
-
-      // Use discovered columns if found, otherwise fall back to stored columns, but NEVER let secondary columns overwrite primary ones or break merged cell blocks
-      const safeProductCol = discoveredCols.product || columns.product || 1;
-      const safeAmountCol = discoveredCols.amount || (columns.amount !== safeProductCol ? columns.amount : undefined) || worksheet.columnCount || 6;
-      
-      // Only write to optional columns if they exist explicitly in the actual table headers!
-      const safeSrNoCol = discoveredCols.srNo;
-      const safeSkuCol = discoveredCols.sku;
-      const safeQtyCol = discoveredCols.qty;
-      const safeRateCol = discoveredCols.rate;
-      const safeGstCol = discoveredCols.gst;
-
-      for (let i = 0; i < Math.max(itemsCount, sampleRowCount); i++) {
-        const rNumber = dataStartRowIndex + i;
-        const row = worksheet.getRow(rNumber);
-
-        if (i < itemsCount) {
-          const p = model.products[i];
-          if (safeSrNoCol) row.getCell(safeSrNoCol).value = i + 1;
-
-          // If Qty or Rate columns don't exist in this template's table layout, cleanly fold them into the Product Description so OCR data isn't lost!
-          let displayText = p.product;
-          if (!safeQtyCol || !safeRateCol) {
-            const details = [];
-            if (!safeQtyCol && p.qty !== undefined) details.push(`Qty: ${p.qty}`);
-            if (!safeRateCol && p.rate !== undefined) details.push(`Rate: ₹${p.rate}`);
-            if (details.length > 0) displayText += ` (${details.join(", ")})`;
-          }
-          row.getCell(safeProductCol).value = displayText;
-
-          if (safeSkuCol && p.sku) row.getCell(safeSkuCol).value = p.sku;
-          if (safeQtyCol) row.getCell(safeQtyCol).value = p.qty;
-          if (safeRateCol) row.getCell(safeRateCol).value = p.rate;
-          if (safeGstCol && safeGstCol !== safeProductCol) row.getCell(safeGstCol).value = `${p.gst}%`;
-
-          // Inject dynamic formula for Amount (=Qty * Rate) only when both separate columns safely exist
-          if (safeQtyCol && safeRateCol) {
-            const qtyColLetter = worksheet.getColumn(safeQtyCol).letter;
-            const rateColLetter = worksheet.getColumn(safeRateCol).letter;
-            row.getCell(safeAmountCol).value = {
-              formula: `${qtyColLetter}${rNumber}*${rateColLetter}${rNumber}`,
-              result: p.amount,
-            };
-          } else {
-            row.getCell(safeAmountCol).value = p.amount;
-          }
-        } else {
-          // Clear unused sample rows while keeping styles intact
-          if (safeSrNoCol) row.getCell(safeSrNoCol).value = null;
-          row.getCell(safeProductCol).value = null;
-          if (safeSkuCol) row.getCell(safeSkuCol).value = null;
-          if (safeQtyCol) row.getCell(safeQtyCol).value = null;
-          if (safeRateCol) row.getCell(safeRateCol).value = null;
-          if (safeGstCol) row.getCell(safeGstCol).value = null;
-          row.getCell(safeAmountCol).value = null;
-        }
-      }
-
-      // 6. Automatically Recalculate Totals & Formulas
-      const actualEndRow = dataStartRowIndex + Math.max(itemsCount, sampleRowCount) - 1;
-      const amtColLetter = worksheet.getColumn(safeAmountCol).letter;
-
-      if (totals.subtotalRowIndex) {
-        const subRow = worksheet.getRow(totals.subtotalRowIndex + rowOffset);
-        subRow.getCell(totals.valueColumnIndex).value = {
-          formula: `SUM(${amtColLetter}${dataStartRowIndex}:${amtColLetter}${actualEndRow})`,
-          result: model.totals.subtotal,
-        };
-      }
-
-      if (totals.discountRowIndex && model.discount.value > 0) {
-        const discRow = worksheet.getRow(totals.discountRowIndex + rowOffset);
-        discRow.getCell(totals.valueColumnIndex).value = -model.discount.value;
-      }
-
-      if (totals.taxRowIndex) {
-        const taxRow = worksheet.getRow(totals.taxRowIndex + rowOffset);
-        taxRow.getCell(totals.valueColumnIndex).value = model.gstTotal;
-      }
-
-      if (totals.totalRowIndex) {
-        const totRow = worksheet.getRow(totals.totalRowIndex + rowOffset);
-        totRow.getCell(totals.valueColumnIndex).value = model.totals.payable;
-      }
-
-      // 7. Section-Aware Placeholder Scanner
-      //    DEBUG: Log all cells in header area so we can see exactly what's there
-      console.log("=== TEMPLATE DEBUG: Header area cells ===");
-      console.log("mapping.headerRowIndex =", mapping.headerRowIndex);
-      for (let r = 1; r <= Math.min(mapping.headerRowIndex + 2, worksheet.rowCount || 50); r++) {
-        const row = worksheet.getRow(r);
-        const cells: string[] = [];
-        row.eachCell({ includeEmpty: false }, (cell, colIdx) => {
-          const raw = cell.value;
-          let display = "";
-          if (raw === null || raw === undefined) {
-            display = "(null)";
-          } else if (typeof raw === "object" && "richText" in (raw as any)) {
-            const rt = (raw as any).richText;
-            display = `[RT: "${rt.map((r: any) => r.text).join("")}"]`;
-          } else {
-            display = `"${String(raw).substring(0, 40)}"`;
-          }
-          cells.push(`Col${colIdx}=${display}`);
-        });
-        if (cells.length > 0) console.log(`  R${r}: ${cells.join(" | ")}`);
-      }
-      console.log("=== END DEBUG ===")
-
       // Helper: safely extract text from any ExcelJS cell value (handles RichText, formulas, etc.)
       function getCellText(cellValue: unknown): string {
         if (cellValue === null || cellValue === undefined) return "";
@@ -276,9 +107,193 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         return keywords.some(kw => lower === kw || lower.includes(kw));
       }
 
-      // Step A: Find client section start (look for "Billed to", "Bill To", "Ship To", "To:", "Customer", etc.)
+      // Ensure we have fallback template mapping
+      let mapping: ExcelTemplateMapping | undefined = brand.customExcelMapping;
+      if (!mapping) {
+        mapping = await analyzeExcelTemplate(brand.customExcelTemplate);
+      }
+
+      // 3.5 Absolute Live Spreadsheet Analysis (Overriding buggy stored mappings)
+      let trueHeaderRowIndex = mapping.headerRowIndex;
+      const liveCols: {
+        srNo?: number;
+        product?: number;
+        sku?: number;
+        qty?: number;
+        rate?: number;
+        gst?: number;
+        amount?: number;
+      } = {};
+
+      let bestMatches = -1;
+      for (let r = 1; r <= Math.min(50, worksheet.rowCount || 50); r++) {
+        const row = worksheet.getRow(r);
+        let currentMatches = 0;
+        const tempCols: typeof liveCols = {};
+
+        row.eachCell({ includeEmpty: false }, (cell, colNum) => {
+          const text = getCellText(cell.value).toUpperCase().trim();
+          if (!text) return;
+          if (/^(SR|SL|S\.?\s*NO|NO\.|SNO)/.test(text)) { tempCols.srNo = colNum; currentMatches++; }
+          else if (/^(PRODUCT|ITEM|DESCRIPTION|PARTICULARS|NAME|SPECIFICATION|GOODS|DETAILS)/.test(text)) { tempCols.product = colNum; currentMatches++; }
+          else if (/^(SKU|MODEL|CODE|PART|ITEM\s*CODE)/.test(text)) { tempCols.sku = colNum; currentMatches++; }
+          else if (/^(QTY|QUANTITY|PIECES|UNITS|NOS)/.test(text)) { tempCols.qty = colNum; currentMatches++; }
+          else if (/^(RATE|PRICE|UNIT\s*COST|COST|UNIT\s*PRICE)/.test(text)) { tempCols.rate = colNum; currentMatches++; }
+          else if (/^(GST|TAX|TAXED|TAXABLE|IGST|CGST|SGST|GST\s*%)/.test(text)) { tempCols.gst = colNum; currentMatches++; }
+          else if (/^(AMOUNT|TOTAL|VALUE|NET)/.test(text)) { tempCols.amount = colNum; currentMatches++; }
+        });
+
+        if (currentMatches >= 2 && (tempCols.product !== undefined || tempCols.amount !== undefined) && currentMatches > bestMatches) {
+          bestMatches = currentMatches;
+          trueHeaderRowIndex = r;
+          Object.assign(liveCols, tempCols);
+        }
+      }
+
+      const dataStartRowIndex = (bestMatches >= 2 && trueHeaderRowIndex) ? (trueHeaderRowIndex + 1) : mapping.dataStartRowIndex;
+      let calculatedEndRow = dataStartRowIndex;
+      for (let r = dataStartRowIndex; r <= (worksheet.rowCount || dataStartRowIndex + 30); r++) {
+        const row = worksheet.getRow(r);
+        let hitFooter = false;
+        row.eachCell({ includeEmpty: false }, (cell) => {
+          const val = getCellText(cell.value).toUpperCase().trim();
+          if (/^(SUBTOTAL|SUB\s*TOTAL|DISCOUNT|REBATE|TAX\s*\(|TOTAL\s*PAYABLE|NET\s*PAYABLE|GRAND\s*TOTAL|TERMS|CONDITIONS|BANK|ACCOUNT|IFSC|SIGNATURE|FOR\s+|NOTE:|IN\s*WORDS)/.test(val)) {
+            hitFooter = true;
+          }
+        });
+        if (hitFooter) {
+          calculatedEndRow = Math.max(dataStartRowIndex, r - 1);
+          break;
+        }
+        calculatedEndRow = r;
+      }
+      const dataEndRowIndex = (bestMatches >= 2) ? calculatedEndRow : mapping.dataEndRowIndex;
+      const headerRowIndex = (bestMatches >= 2) ? trueHeaderRowIndex : mapping.headerRowIndex;
+
+      const sampleRowCount = Math.max(1, dataEndRowIndex - dataStartRowIndex + 1);
+      const itemsCount = model.products.length;
+
+      // 4. Dynamic Row Insertion while preserving 100% formatting
+      let rowOffset = 0;
+      if (itemsCount > sampleRowCount) {
+        const rowsToInsert = itemsCount - sampleRowCount;
+        rowOffset = rowsToInsert;
+
+        const sampleRowNumber = dataEndRowIndex;
+        const sampleRow = worksheet.getRow(sampleRowNumber);
+
+        worksheet.spliceRows(sampleRowNumber + 1, 0, ...new Array(rowsToInsert).fill([]));
+
+        for (let i = 1; i <= rowsToInsert; i++) {
+          const targetRowNumber = sampleRowNumber + i;
+          const targetRow = worksheet.getRow(targetRowNumber);
+          targetRow.height = sampleRow.height;
+
+          sampleRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+            const targetCell = targetRow.getCell(colIdx);
+            targetCell.style = Object.assign({}, cell.style);
+            if (cell.numFmt) targetCell.numFmt = cell.numFmt;
+          });
+        }
+      }
+
+      // 5. Safe Product Injection using verified live spreadsheet columns
+      const safeProductCol = liveCols.product || mapping.columns.product || 1;
+      const safeAmountCol = liveCols.amount || (mapping.columns.amount !== safeProductCol ? mapping.columns.amount : undefined) || worksheet.columnCount || 6;
+      
+      const safeSrNoCol = liveCols.srNo;
+      const safeSkuCol = liveCols.sku;
+      const safeQtyCol = liveCols.qty;
+      const safeRateCol = liveCols.rate;
+      const safeGstCol = liveCols.gst;
+
+      for (let i = 0; i < Math.max(itemsCount, sampleRowCount); i++) {
+        const rNumber = dataStartRowIndex + i;
+        const row = worksheet.getRow(rNumber);
+
+        if (i < itemsCount) {
+          const p = model.products[i];
+          if (safeSrNoCol && safeSrNoCol !== safeProductCol) row.getCell(safeSrNoCol).value = i + 1;
+
+          let displayText = p.product;
+          if (!safeQtyCol || !safeRateCol) {
+            const details = [];
+            if (!safeQtyCol && p.qty !== undefined) details.push(`Qty: ${p.qty}`);
+            if (!safeRateCol && p.rate !== undefined) details.push(`Rate: ₹${p.rate}`);
+            if (details.length > 0) displayText += ` (${details.join(", ")})`;
+          }
+          row.getCell(safeProductCol).value = displayText;
+
+          if (safeSkuCol && safeSkuCol !== safeProductCol) row.getCell(safeSkuCol).value = p.sku;
+          if (safeQtyCol && safeQtyCol !== safeProductCol) row.getCell(safeQtyCol).value = p.qty;
+          if (safeRateCol && safeRateCol !== safeProductCol) row.getCell(safeRateCol).value = p.rate;
+          if (safeGstCol && safeGstCol !== safeProductCol && safeGstCol !== safeAmountCol) row.getCell(safeGstCol).value = `${p.gst}%`;
+
+          if (safeQtyCol && safeRateCol) {
+            const qtyColLetter = worksheet.getColumn(safeQtyCol).letter;
+            const rateColLetter = worksheet.getColumn(safeRateCol).letter;
+            row.getCell(safeAmountCol).value = {
+              formula: `${qtyColLetter}${rNumber}*${rateColLetter}${rNumber}`,
+              result: p.amount,
+            };
+          } else {
+            row.getCell(safeAmountCol).value = p.amount;
+          }
+        } else {
+          if (safeSrNoCol) row.getCell(safeSrNoCol).value = null;
+          row.getCell(safeProductCol).value = null;
+          if (safeSkuCol) row.getCell(safeSkuCol).value = null;
+          if (safeQtyCol) row.getCell(safeQtyCol).value = null;
+          if (safeRateCol) row.getCell(safeRateCol).value = null;
+          if (safeGstCol) row.getCell(safeGstCol).value = null;
+          row.getCell(safeAmountCol).value = null;
+        }
+      }
+
+      // 6. Automatically Recalculate Totals & Formulas
+      const actualEndRow = dataStartRowIndex + Math.max(itemsCount, sampleRowCount) - 1;
+      const amtColLetter = worksheet.getColumn(safeAmountCol).letter;
+
+      if (mapping.totals.subtotalRowIndex) {
+        const subRow = worksheet.getRow(mapping.totals.subtotalRowIndex + rowOffset);
+        subRow.getCell(mapping.totals.valueColumnIndex).value = {
+          formula: `SUM(${amtColLetter}${dataStartRowIndex}:${amtColLetter}${actualEndRow})`,
+          result: model.totals.subtotal,
+        };
+      }
+
+      if (mapping.totals.discountRowIndex && model.discount.value > 0) {
+        const discRow = worksheet.getRow(mapping.totals.discountRowIndex + rowOffset);
+        discRow.getCell(mapping.totals.valueColumnIndex).value = -model.discount.value;
+      }
+
+      if (mapping.totals.taxRowIndex) {
+        const taxRow = worksheet.getRow(mapping.totals.taxRowIndex + rowOffset);
+        taxRow.getCell(mapping.totals.valueColumnIndex).value = model.gstTotal;
+      }
+
+      if (mapping.totals.totalRowIndex) {
+        const totRow = worksheet.getRow(mapping.totals.totalRowIndex + rowOffset);
+        totRow.getCell(mapping.totals.valueColumnIndex).value = model.totals.payable;
+      }
+
+      // 7. Section-Aware Placeholder Scanner
+      console.log("=== TEMPLATE DEBUG: Header area cells ===");
+      console.log("headerRowIndex =", headerRowIndex);
+      for (let r = 1; r <= Math.min(headerRowIndex + 2, worksheet.rowCount || 50); r++) {
+        const row = worksheet.getRow(r);
+        const cells: string[] = [];
+        row.eachCell({ includeEmpty: false }, (cell, colIdx) => {
+          const text = getCellText(cell.value);
+          if (text) cells.push(`Col${colIdx}="${text.substring(0, 40)}"`);
+        });
+        if (cells.length > 0) console.log(`  R${r}: ${cells.join(" | ")}`);
+      }
+      console.log("=== END DEBUG ===")
+
+      // Step A: Find client section start
       let clientSectionStart = -1;
-      for (let r = 1; r <= mapping.headerRowIndex; r++) {
+      for (let r = 1; r <= headerRowIndex; r++) {
         const row = worksheet.getRow(r);
         row.eachCell({ includeEmpty: false }, (cell) => {
           const text = getCellText(cell.value).toLowerCase();
@@ -290,9 +305,9 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
           }
         });
       }
-      if (clientSectionStart === -1) clientSectionStart = Math.max(1, Math.floor(mapping.headerRowIndex / 2));
-
-      // Step B: Replace COMPANY placeholders (rows 1 to clientSectionStart - 1)
+      if (clientSectionStart === -1) clientSectionStart = Math.max(1, Math.floor(headerRowIndex / 2));
+      
+      // Step B: Replace COMPANY placeholders
       for (let r = 1; r < clientSectionStart; r++) {
         const row = worksheet.getRow(r);
         row.eachCell({ includeEmpty: false }, (cell) => {
@@ -306,11 +321,11 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
           } else if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "city", "[city, st zip]", "[city, state, zip]", "st zip"])) {
             cell.value = "India";
           } else if (fuzzyMatch(text, ["zip code", "pin code", "pincode", "postal code", "zip", "[zip]"])) {
-            cell.value = ""; // clear placeholder
+            cell.value = "";
           } else if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact number", "tel", "[000-000-0000]"]) || text.toLowerCase().startsWith("phone:")) {
             cell.value = model.company.email ? `Email: ${model.company.email}` : "";
           } else if (fuzzyMatch(text, ["fax", "fax:"])) {
-            cell.value = ""; // clear fax line
+            cell.value = "";
           } else if (fuzzyMatch(text, ["yourwebsite.com", "www.yourwebsite.com", "website", "somedomain.com"])) {
             cell.value = model.company.email ? `Website: ${model.company.email.split("@")[1] || model.company.email}` : "";
           } else if (fuzzyMatch(text, ["prepared by", "sales rep", "salesperson", "[salesperson name]"])) {
@@ -319,14 +334,14 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         });
       }
 
-      // Step C: Replace CLIENT placeholders (rows clientSectionStart to headerRowIndex)
-      for (let r = clientSectionStart; r <= mapping.headerRowIndex; r++) {
+      // Step C: Replace CLIENT placeholders
+      for (let r = clientSectionStart; r <= headerRowIndex; r++) {
         const row = worksheet.getRow(r);
         row.eachCell({ includeEmpty: false }, (cell) => {
           const text = getCellText(cell.value);
           if (fuzzyMatch(text, ["client name", "customer name", "party name", "buyer name", "[name]", "recipient name", "[company name]"])) {
             if (r > clientSectionStart && getCellText(worksheet.getRow(r - 1).getCell(cell.col).value) === model.customer.name) {
-              cell.value = ""; // Avoid repeating customer name on consecutive rows
+              cell.value = "";
             } else {
               cell.value = model.customer.name;
             }
@@ -343,7 +358,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         });
       }
 
-      // Step D: Replace UNIVERSAL placeholders (date, quote #, terms, due dates, etc.) — scan ALL rows
+      // Step D: Replace UNIVERSAL placeholders
       for (let r = 1; r <= (worksheet.rowCount || 100); r++) {
         const row = worksheet.getRow(r);
         row.eachCell({ includeEmpty: false }, (cell, colIdx) => {
@@ -351,12 +366,10 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
           const lower = text.toLowerCase().trim();
           const upper = text.toUpperCase().trim();
 
-          // Date placeholders
           if (lower === "mm/dd/yyyy" || lower === "dd/mm/yyyy" || lower === "yyyy-mm-dd" || lower === "[date]") {
             cell.value = model.date;
           }
 
-          // Quote / Invoice number placeholders (including bracketed numbers like [123456])
           if (lower === "00001" || lower === "00002" || lower === "[number]" || lower === "[quote #]" || lower === "[123456]" || (lower.startsWith("[") && lower.endsWith("]") && !isNaN(Number(lower.slice(1, -1))) && r < 10)) {
             const leftText = colIdx > 1 ? getCellText(row.getCell(colIdx - 1).value).toUpperCase() : "";
             if (leftText.includes("CUSTOMER") || leftText.includes("ID") || leftText.includes("CLIENT")) {
@@ -370,13 +383,11 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
             }
           }
 
-          // Customer ID placeholder
           if (lower === "customer123" || lower === "[customer id]" || lower === "[id]" || lower === "[123]") {
             cell.value = model.customer.name;
           }
 
-          // Terms and conditions placeholders below table
-          if (r > mapping.headerRowIndex) {
+          if (r > headerRowIndex) {
             if (fuzzyMatch(text, ["enter your terms", "terms and conditions here", "special notes and instructions", "thank you for your business"])) {
               if (lower === "notes:" || lower === "terms:") {
                 const nextCell = row.getCell(colIdx + 1);
@@ -389,7 +400,6 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
             }
           }
 
-          // Label + Value patterns (put data in NEXT cell if empty or placeholder)
           if (upper === "DATE:" || (upper === "DATE" && r < clientSectionStart)) {
             const nextCell = row.getCell(colIdx + 1);
             const nextText = getCellText(nextCell.value).toLowerCase();
@@ -428,7 +438,6 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
             }
           }
 
-          // Final safety sweep: if ANY cell still contains unreplaced square-bracketed placeholder text like [Something], clear it so no dummy tags show in demo
           if (typeof cell.value === "string" && cell.value.trim().startsWith("[") && cell.value.trim().endsWith("]")) {
             cell.value = "";
           }
