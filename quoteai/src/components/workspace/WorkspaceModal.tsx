@@ -1,20 +1,19 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import type { BrandSettings, CompanySettings, QuoteItem } from "@/types";
 import { useQuotation } from "@/hooks/useQuotation";
 import { downloadQuotationPdf } from "@/lib/pdf";
 import { downloadQuotationExcel } from "@/lib/excel";
 import { RequestCard } from "./RequestCard";
 import { QuotationBuilder } from "./QuotationBuilder";
+import { ExportDesignModal } from "../quotation/ExportDesignModal";
+import type { BrandSettings, CompanySettings, QuoteItem, Quotation, ClientDetails } from "@/types";
 import { AITimeline } from "../ai/AITimeline";
 import { useAITimeline } from "@/hooks/useAITimeline";
 import { Modal } from "@/components/ui/Modal";
 import { autoLearnProductsFromQuoteItems } from "@/services/inventory";
 import { addQuotation } from "@/services/quotations";
 import { getBrandSettings } from "@/services/brand";
-import { ExportDesignModal } from "@/components/quotation/ExportDesignModal";
-import type { Quotation } from "@/types";
 
 interface WorkspaceModalProps {
   brand: BrandSettings;
@@ -38,6 +37,13 @@ export function WorkspaceModal({
   onScannedItemsProcessed
 }: WorkspaceModalProps) {
   const [request, setRequest] = useState("");
+  const [clientDetails, setClientDetails] = useState<ClientDetails>({
+    name: "Apollo Hospitals",
+    email: "procurement@apollo.com",
+    phone: "+91 9876543210",
+    address: "123 Health Ave, Bangalore, Karnataka 560001",
+    gstNumber: "29ABCDE1234F1Z5"
+  });
   const {
     items,
     discount,
@@ -148,6 +154,8 @@ export function WorkspaceModal({
 
           <div className="workspace-main">
             <QuotationBuilder
+              clientDetails={clientDetails}
+              setClientDetails={setClientDetails}
               items={items}
               discount={discount}
               subtotal={subtotal}
@@ -171,8 +179,9 @@ export function WorkspaceModal({
           selectedQuotes={[
             {
               id: currentQuoteId,
-              customer: "Apollo Hospitals",
+              customer: clientDetails.name || "Walk-in Customer",
               customerId: "c1",
+              clientDetails: clientDetails,
               items: items.map((item) => ({ ...item })),
               discount,
               subtotal,
@@ -187,6 +196,7 @@ export function WorkspaceModal({
             },
           ]}
           brand={getBrandSettings()}
+          company={company}
           onClose={() => setShowExportModal(false)}
           onOpenDesignStudio={() => {
             setShowExportModal(false);

@@ -55,6 +55,28 @@ export interface ExcelTemplateMapping {
     nameRow?: number;
     nameCol?: number;
   };
+  clientDetailsCoords?: {
+    nameRow?: number;
+    nameCol?: number;
+    addressRow?: number;
+    addressCol?: number;
+    gstRow?: number;
+    gstCol?: number;
+    phoneRow?: number;
+    phoneCol?: number;
+  };
+  quotationNoCoords?: {
+    row?: number;
+    col?: number;
+  };
+  dateCoords?: {
+    row?: number;
+    col?: number;
+  };
+  companyNameCoords?: {
+    row?: number;
+    col?: number;
+  };
 }
 
 export interface BrandSettings {
@@ -122,6 +144,14 @@ export interface QuoteItem {
   alternatives?: ProductAlternative[];
 }
 
+export interface ClientDetails {
+  name: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  gstNumber?: string;
+}
+
 // ── Customers ───────────────────────────────
 
 export interface Customer {
@@ -130,6 +160,8 @@ export interface Customer {
   company: string;
   email: string;
   phone: string;
+  address?: string;
+  gstNumber?: string;
   initials: string;
   color: string;
   totalOrders: number;
@@ -171,8 +203,9 @@ export interface QuotationVersion {
 
 export interface Quotation {
   id: string;
-  customer: string;
+  customer: string; // The legacy name field
   customerId: string;
+  clientDetails?: ClientDetails; // Comprehensive client info for export
   items: QuoteItem[];
   discount: number;
   subtotal: number;

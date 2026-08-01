@@ -1,6 +1,6 @@
 "use client";
 
-import type { BrandSettings, CompanySettings, QuoteItem } from "@/types";
+import type { BrandSettings, CompanySettings, QuoteItem, ClientDetails } from "@/types";
 import { DEFAULT_COMPANY } from "@/lib/constants";
 
 export interface InternalQuotationModel {
@@ -10,6 +10,8 @@ export interface InternalQuotationModel {
     company?: string;
     email?: string;
     phone?: string;
+    address?: string;
+    gstNumber?: string;
   };
   products: {
     product: string;
@@ -42,6 +44,7 @@ export interface InternalQuotationModel {
 export interface CreateModelPayload {
   quotationId: string;
   customerName?: string;
+  clientDetails?: ClientDetails;
   items: QuoteItem[];
   discount?: number;
   tax?: number;
@@ -87,9 +90,13 @@ export function createQuotationModel(
   const payable = payload.total !== undefined ? payload.total : Math.round(netTotal + gstTotal);
 
   return {
-    quotationId: payload.quotationId || "QT-UNKNOWN",
+    quotationId: payload.quotationId,
     customer: {
-      name: payload.customerName || "Valued Customer",
+      name: payload.clientDetails?.name || payload.customerName || "Walk-in Customer",
+      email: payload.clientDetails?.email,
+      phone: payload.clientDetails?.phone,
+      address: payload.clientDetails?.address,
+      gstNumber: payload.clientDetails?.gstNumber,
     },
     products,
     gstTotal,

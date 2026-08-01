@@ -1,12 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import type { CompanySettings } from "@/types";
+import type { CompanySettings, BrandSettings } from "@/types";
 import { ToolModal } from "@/components/ui/Modal";
 
 interface SettingsModalProps {
   company: CompanySettings;
   onCompanyChange: (c: CompanySettings) => void;
+  brand: BrandSettings;
+  onBrandChange: (b: BrandSettings) => void;
   onClose: () => void;
   notify: (msg: string) => void;
 }
@@ -14,76 +16,126 @@ interface SettingsModalProps {
 export function SettingsModal({
   company,
   onCompanyChange,
+  brand,
+  onBrandChange,
   onClose,
   notify,
 }: SettingsModalProps) {
-  const [localCompany, setLocalCompany] = useState(company);
+  const [localCompany, setLocalCompany] = useState<CompanySettings>(company);
+  const [localBrand, setLocalBrand] = useState<BrandSettings>(brand);
 
   const handleSave = () => {
     onCompanyChange(localCompany);
-    notify("Settings saved successfully");
+    onBrandChange(localBrand);
+    notify("✅ Company settings and terms saved successfully!");
     onClose();
   };
 
   return (
     <ToolModal
-      title="Company Settings"
-      subtitle="Update your business and tax details."
+      title="Company Profile & Settings"
+      subtitle="Update your business info, GST, and bank details."
       onClose={onClose}
     >
-      <div>
-        <label>Company Name</label>
-        <input
-          className="field"
-          type="text"
-          value={localCompany?.name || ""}
-          onChange={(e) =>
-            setLocalCompany({ ...localCompany, name: e.target.value })
-          }
-        />
+      <div className="space-y-6">
+        {/* Business Details */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-800 pb-2">
+            🏢 Business Details
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                Company Name
+              </label>
+              <input
+                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                type="text"
+                placeholder="Operon AI Inc."
+                value={localCompany.name}
+                onChange={(e) => setLocalCompany({ ...localCompany, name: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                GST Number
+              </label>
+              <input
+                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white uppercase"
+                type="text"
+                placeholder="22AAAAA0000A1Z5"
+                value={localCompany.gstNumber}
+                onChange={(e) => setLocalCompany({ ...localCompany, gstNumber: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                Business Email
+              </label>
+              <input
+                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                type="email"
+                placeholder="sales@company.com"
+                value={localCompany.email}
+                onChange={(e) => setLocalCompany({ ...localCompany, email: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                Default GST (%)
+              </label>
+              <input
+                className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white"
+                type="number"
+                placeholder="18"
+                value={localCompany.defaultGst}
+                onChange={(e) => setLocalCompany({ ...localCompany, defaultGst: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
 
-        <label>GST Number</label>
-        <input
-          className="field"
-          type="text"
-          value={localCompany?.gstNumber || ""}
-          onChange={(e) =>
-            setLocalCompany({ ...localCompany, gstNumber: e.target.value })
-          }
-        />
+        {/* Financials / Bank */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-800 pb-2">
+            🏦 Bank Account Details
+          </h3>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+              Payment Information (Printed on Quotations)
+            </label>
+            <textarea
+              className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white h-24"
+              placeholder="Bank Name: HDFC Bank&#10;Account No: 50200000000000&#10;IFSC Code: HDFC0000001"
+              value={localCompany.bankAccount}
+              onChange={(e) => setLocalCompany({ ...localCompany, bankAccount: e.target.value })}
+            />
+          </div>
+        </div>
 
-        <label>Business Email</label>
-        <input
-          className="field"
-          type="email"
-          value={localCompany?.email || ""}
-          onChange={(e) =>
-            setLocalCompany({ ...localCompany, email: e.target.value })
-          }
-        />
+        {/* Terms and Conditions */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-800 pb-2">
+            ⚖️ Terms & Conditions
+          </h3>
+          <div>
+            <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+              Standard Quotation Terms
+            </label>
+            <textarea
+              className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white h-24"
+              placeholder="1. Delivery within 7 days.&#10;2. Warranty 1 year.&#10;3. Goods once sold will not be returned."
+              value={localBrand.terms}
+              onChange={(e) => setLocalBrand({ ...localBrand, terms: e.target.value })}
+            />
+          </div>
+        </div>
 
-        <label>Default GST (%)</label>
-        <input
-          className="field"
-          type="text"
-          value={localCompany?.defaultGst || ""}
-          onChange={(e) =>
-            setLocalCompany({ ...localCompany, defaultGst: e.target.value })
-          }
-        />
-
-        <label>Bank Account Details</label>
-        <textarea
-          className="terms"
-          style={{ height: 80 }}
-          value={localCompany?.bankAccount || ""}
-          onChange={(e) =>
-            setLocalCompany({ ...localCompany, bankAccount: e.target.value })
-          }
-        />
-
-        <div style={{ marginTop: 24, textAlign: "right" }}>
-          <button className="primary" onClick={handleSave}>
+        <div className="pt-4 flex justify-end">
+          <button
+            onClick={handleSave}
+            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors"
+          >
             Save Settings
           </button>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import ExcelJS from "exceljs";
-import type { QuoteItem, BrandSettings, CompanySettings, ExcelTemplateMapping } from "@/types";
+import type { QuoteItem, BrandSettings, CompanySettings, ExcelTemplateMapping, ClientDetails } from "@/types";
 import { createQuotationModel, validateQuotationModel, type InternalQuotationModel } from "@/services/quotationModel";
 import { analyzeExcelTemplate } from "@/services/excelAnalyzer";
 
@@ -14,6 +14,7 @@ export interface ExcelPayload {
   total: number;
   quotationId: string;
   customerName: string;
+  clientDetails?: ClientDetails;
   date: string;
 }
 
@@ -45,7 +46,7 @@ function triggerDownload(buffer: ExcelJS.Buffer, fileName: string): void {
  * Guarantees 100% preservation of colors, merged cells, formulas, borders, and logos.
  */
 export async function downloadQuotationExcel(payload: ExcelPayload): Promise<void> {
-  const { brand, company, items, discount, tax, total, quotationId, customerName, date } = payload;
+  const { brand, company, items, discount, tax, total, quotationId, customerName, clientDetails, date } = payload;
   const fileName = `${quotationId}-${customerName.replace(/[^a-z0-9]/gi, "_")}.xlsx`;
 
   // 1. Create Independent Quotation Model
@@ -53,6 +54,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
     {
       quotationId,
       customerName,
+      clientDetails,
       items,
       discount,
       tax,
@@ -120,6 +122,9 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
       }
 
       // 5. Inject Dynamic Product Cells
+      if (!columns.qty || !columns.rate || !columns.product || !columns.amount) {
+        throw new Error("Template mapping is incomplete: missing required columns (product, qty, rate, or amount). Please re-upload your template.");
+      }
       const qtyColLetter = worksheet.getColumn(columns.qty).letter;
       const rateColLetter = worksheet.getColumn(columns.rate).letter;
 
@@ -180,20 +185,157 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         totRow.getCell(totals.valueColumnIndex).value = model.totals.payable;
       }
 
-      // 7. Update Metadata in Header Rows (Customer, Quote No, Date)
+      // 7. Section-Aware Placeholder Scanner
+      //    DEBUG: Log all cells in header area so we can see exactly what's there
+      console.log("=== TEMPLATE DEBUG: Header area cells ===");
+      console.log("mapping.headerRowIndex =", mapping.headerRowIndex);
+      for (let r = 1; r <= Math.min(mapping.headerRowIndex + 2, worksheet.rowCount || 50); r++) {
+        const row = worksheet.getRow(r);
+        const cells: string[] = [];
+        row.eachCell({ includeEmpty: false }, (cell, colIdx) => {
+          const raw = cell.value;
+          let display = "";
+          if (raw === null || raw === undefined) {
+            display = "(null)";
+          } else if (typeof raw === "object" && "richText" in (raw as Record<string, unknown>)) {
+            const rt = (raw as { richText: { text: string }[] }).richText;
+            display = `[RT: "${rt.map(r => r.text).join("")}"]`;
+          } else {
+            display = `"${String(raw).substring(0, 40)}"`;
+          }
+          cells.push(`Col${colIdx}=${display}`);
+        });
+        if (cells.length > 0) console.log(`  R${r}: ${cells.join(" | ")}`);
+      }
+      console.log("=== END DEBUG ===")
+
+      // Helper: safely extract text from any ExcelJS cell value (handles RichText, formulas, etc.)
+      function getCellText(cellValue: unknown): string {
+        if (cellValue === null || cellValue === undefined) return "";
+        if (typeof cellValue === "string") return cellValue.trim();
+        if (typeof cellValue === "number" || typeof cellValue === "boolean") return String(cellValue);
+        // RichText: { richText: [{text: "..."}] }
+        if (typeof cellValue === "object" && "richText" in (cellValue as Record<string, unknown>)) {
+          const rt = (cellValue as { richText: { text: string }[] }).richText;
+          return rt.map(r => r.text).join("").trim();
+        }
+        // Formula: { formula: "...", result: ... }
+        if (typeof cellValue === "object" && "result" in (cellValue as Record<string, unknown>)) {
+          return String((cellValue as { result: unknown }).result || "").trim();
+        }
+        return String(cellValue).trim();
+      }
+
+      // Helper: fuzzy match — checks if text contains any of the given keywords
+      function fuzzyMatch(text: string, keywords: string[]): boolean {
+        const lower = text.toLowerCase().trim();
+        return keywords.some(kw => lower === kw || lower.includes(kw));
+      }
+
+      // Step A: Find client section start (look for "Billed to", "Bill To", "Ship To", "To:", etc.)
+      let clientSectionStart = -1;
       for (let r = 1; r <= mapping.headerRowIndex; r++) {
         const row = worksheet.getRow(r);
+        row.eachCell({ includeEmpty: false }, (cell) => {
+          const text = getCellText(cell.value).toLowerCase();
+          if (text.includes("billed to") || text.includes("bill to") || text.includes("ship to") ||
+              text === "to:" || text === "to" || text === "m/s:" || text === "m/s" ||
+              text === "customer:" || text === "client:" || text === "buyer:") {
+            if (clientSectionStart === -1) clientSectionStart = r;
+          }
+        });
+      }
+      // If no explicit client section found, assume it starts halfway through the header area
+      if (clientSectionStart === -1) clientSectionStart = Math.max(1, Math.floor(mapping.headerRowIndex / 2));
+
+      // Step B: Replace COMPANY placeholders (rows 1 to clientSectionStart - 1)
+      for (let r = 1; r < clientSectionStart; r++) {
+        const row = worksheet.getRow(r);
+        row.eachCell({ includeEmpty: false }, (cell) => {
+          const text = getCellText(cell.value);
+          const lower = text.toLowerCase();
+          if (fuzzyMatch(text, ["your company name", "company name", "your company"])) {
+            cell.value = model.company.name;
+          } else if (fuzzyMatch(text, ["yourwebsite.com", "www.yourwebsite.com"])) {
+            cell.value = model.company.email || text;
+          }
+        });
+      }
+
+      // Step C: Replace CLIENT placeholders (rows clientSectionStart to headerRowIndex)
+      for (let r = clientSectionStart; r <= mapping.headerRowIndex; r++) {
+        const row = worksheet.getRow(r);
+        row.eachCell({ includeEmpty: false }, (cell) => {
+          const text = getCellText(cell.value);
+          const lower = text.toLowerCase();
+
+          if (fuzzyMatch(text, ["client name", "customer name", "party name", "buyer name"])) {
+            cell.value = model.customer.name;
+          } else if (fuzzyMatch(text, ["street address", "client address"])) {
+            cell.value = model.customer.address || "";
+          } else if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state"])) {
+            cell.value = model.customer.address ? "" : ""; // clear it, address is already in street row
+          } else if (fuzzyMatch(text, ["zip code", "pin code", "pincode", "postal code"])) {
+            cell.value = model.customer.gstNumber ? `GSTIN: ${model.customer.gstNumber}` : "";
+          } else if (lower === "phone" || lower === "phone number" || lower === "mobile" || lower === "contact" || lower === "contact number") {
+            const contactParts = [model.customer.phone, model.customer.email].filter(Boolean);
+            cell.value = contactParts.length > 0 ? contactParts.join(" | ") : "";
+          }
+        });
+      }
+
+      // Step D: Replace UNIVERSAL placeholders (date, quote #, etc.) — scan ALL rows
+      const scanEnd = mapping.headerRowIndex + 5;
+      for (let r = 1; r <= Math.min(scanEnd, worksheet.rowCount || scanEnd); r++) {
+        const row = worksheet.getRow(r);
         row.eachCell({ includeEmpty: false }, (cell, colIdx) => {
-          const val = cell.value ? String(cell.value).toUpperCase() : "";
-          if (val.includes("QUOTATION") && val.includes("NO") && colIdx + 1 <= worksheet.columnCount) {
+          const text = getCellText(cell.value);
+          const lower = text.toLowerCase();
+          const upper = text.toUpperCase();
+
+          // Date placeholders
+          if (lower === "mm/dd/yyyy" || lower === "dd/mm/yyyy") {
+            cell.value = model.date;
+          }
+
+          // Quote number placeholder
+          if (lower === "00001" || lower === "[number]") {
+            cell.value = model.quotationId;
+          }
+
+          // Customer ID placeholder
+          if (lower === "customer123" || lower === "[customer id]") {
+            cell.value = model.customer.name;
+          }
+
+          // Label + Value patterns (put data in NEXT cell)
+          if (upper === "DATE:" || (upper === "DATE" && r < clientSectionStart)) {
             const nextCell = row.getCell(colIdx + 1);
-            if (!nextCell.value || String(nextCell.value).length < 2) nextCell.value = model.quotationId;
-          } else if (val === "DATE:" || val === "DATE") {
+            const nextText = getCellText(nextCell.value).toLowerCase();
+            if (!nextText || nextText === "mm/dd/yyyy" || nextText === "dd/mm/yyyy" || nextText.length < 3) {
+              nextCell.value = model.date;
+            }
+          }
+          if ((upper.includes("QUOTE") && upper.includes("#")) || (upper.includes("QUOTATION") && upper.includes("NO"))) {
             const nextCell = row.getCell(colIdx + 1);
-            nextCell.value = model.date;
-          } else if (val.includes("CUSTOMER") || val === "TO:" || val === "M/S:") {
+            const nextText = getCellText(nextCell.value);
+            if (!nextText || nextText === "00001" || nextText.length < 2) {
+              nextCell.value = model.quotationId;
+            }
+          }
+          if (upper.includes("PURCHASE ORDER") && upper.includes("#")) {
             const nextCell = row.getCell(colIdx + 1);
-            nextCell.value = model.customer.name;
+            const nextText = getCellText(nextCell.value);
+            if (!nextText || nextText === "00002" || nextText.length < 2) {
+              nextCell.value = model.quotationId;
+            }
+          }
+          if (upper.includes("CUSTOMER") && upper.includes("ID")) {
+            const nextCell = row.getCell(colIdx + 1);
+            const nextText = getCellText(nextCell.value);
+            if (!nextText || nextText === "Customer123" || nextText.length < 2) {
+              nextCell.value = model.customer.name;
+            }
           }
         });
       }
@@ -225,6 +367,9 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
   worksheet.addRow(["QUOTATION NO:", model.quotationId]).font = { bold: true };
   worksheet.addRow(["DATE:", model.date]);
   worksheet.addRow(["CUSTOMER:", model.customer.name]);
+  if (model.customer.address) worksheet.addRow(["ADDRESS:", model.customer.address]);
+  if (model.customer.gstNumber) worksheet.addRow(["GST No:", model.customer.gstNumber]);
+  if (model.customer.phone || model.customer.email) worksheet.addRow(["CONTACT:", `${model.customer.phone || ""} ${model.customer.email ? " | " + model.customer.email : ""}`.trim()]);
   worksheet.addRow([]);
 
   // Table Header
@@ -264,6 +409,14 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
 
   worksheet.addRow([]);
   worksheet.addRow([]);
+  
+  if (model.company.bankAccount) {
+    worksheet.addRow(["Bank Details:"]).font = { bold: true };
+    const bankLines = model.company.bankAccount.split("\n");
+    bankLines.forEach((line) => worksheet.addRow([line]).font = { size: 9, color: { argb: "FF4B5563" } });
+    worksheet.addRow([]);
+  }
+
   worksheet.addRow(["Terms & Conditions:"]).font = { bold: true };
 
   const termsLines = (brand.terms || "Standard delivery and quotation terms apply.").split("\n");

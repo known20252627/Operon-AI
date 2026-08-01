@@ -295,6 +295,8 @@ export default function Home() {
         <SettingsModal
           company={company}
           onCompanyChange={setCompany}
+          brand={brand}
+          onBrandChange={setBrand}
           onClose={handleSettingsClose}
           notify={notify}
         />

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import type { Quotation, BrandSettings } from "@/types";
+import type { Quotation, BrandSettings, CompanySettings } from "@/types";
 import { ToolModal } from "@/components/ui/Modal";
 import { downloadQuotationPdf } from "@/lib/pdf";
 import { downloadQuotationExcel } from "@/lib/excel";
@@ -11,6 +11,7 @@ import { DEFAULT_COMPANY } from "@/lib/constants";
 interface ExportDesignModalProps {
   selectedQuotes: Quotation[];
   brand: BrandSettings;
+  company: CompanySettings;
   onClose: () => void;
   onOpenDesignStudio: () => void;
   notify: (msg: string) => void;
@@ -19,6 +20,7 @@ interface ExportDesignModalProps {
 export function ExportDesignModal({
   selectedQuotes,
   brand,
+  company,
   onClose,
   onOpenDesignStudio,
   notify,
@@ -49,23 +51,26 @@ export function ExportDesignModal({
           if (format === "pdf") {
             downloadQuotationPdf({
               brand: exportBrand,
+              company: company,
               items: quote.items || [],
               discount: quote.discount || 0,
               total: quote.total || 0,
               quotationId: quote.id,
               customerName: quote.customer,
+              clientDetails: quote.clientDetails,
               date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
             });
           } else {
             await downloadQuotationExcel({
               brand: exportBrand,
-              company: DEFAULT_COMPANY,
+              company: company,
               items: quote.items || [],
               discount: quote.discount || 0,
               tax: quote.tax || 0,
               total: quote.total || 0,
               quotationId: quote.id,
               customerName: quote.customer,
+              clientDetails: quote.clientDetails,
               date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
             });
           }

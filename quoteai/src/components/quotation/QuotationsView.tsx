@@ -254,6 +254,7 @@ export function QuotationsView({ onOpenDesign, onNewQuote }: QuotationsViewProps
         <ExportDesignModal
           selectedQuotes={exportTargetQuotes}
           brand={getBrandSettings()}
+          company={DEFAULT_COMPANY}
           onClose={() => setShowExportModal(false)}
           onOpenDesignStudio={() => {
             setShowExportModal(false);

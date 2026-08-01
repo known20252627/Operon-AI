@@ -4,21 +4,23 @@
 
 import { jsPDF } from "jspdf";
 import { formatCurrency } from "./utils";
-import type { QuoteItem, BrandSettings } from "@/types";
+import type { QuoteItem, BrandSettings, ClientDetails, CompanySettings } from "@/types";
 
 export interface PdfPayload {
   brand: BrandSettings;
+  company?: CompanySettings;
   items: QuoteItem[];
   discount: number;
   total: number;
   quotationId: string;
   customerName: string;
+  clientDetails?: ClientDetails;
   date: string;
 }
 
 /** Generate and download a branded quotation PDF. */
 export function downloadQuotationPdf(payload: PdfPayload): void {
-  const { brand, items, discount, total, quotationId, customerName, date } = payload;
+  const { brand, company, items, discount, total, quotationId, customerName, clientDetails, date } = payload;
   const pdf = new jsPDF();
 
   // ── Watermark Text ──────────────────────────
@@ -92,11 +94,41 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
   pdf.setFontSize(18);
   pdf.text("QUOTATION", 16, y);
 
-  // ── Meta line ───────────────────────────────
+  // ── Meta line & Billed To ────────────────
   y += 8;
   pdf.setFontSize(10);
   pdf.setTextColor(105, 99, 120);
-  pdf.text(`${quotationId}  |  To: ${customerName}  |  Date: ${date}`, 16, y);
+  pdf.text(`Quote ID: ${quotationId}  |  Date: ${date}`, 16, y);
+  
+  if (company?.gstNumber) {
+    pdf.text(`GST No: ${company.gstNumber}`, 130, y);
+  }
+  
+  y += 10;
+  pdf.setFontSize(9);
+  pdf.setFont("helvetica", "bold");
+  pdf.setTextColor(35, 31, 53);
+  pdf.text("BILLED TO:", 16, y);
+  pdf.setFont("helvetica", "normal");
+  pdf.setTextColor(105, 99, 120);
+  y += 5;
+  const toName = clientDetails?.name || customerName || "Customer";
+  pdf.text(toName, 16, y);
+  
+  if (clientDetails?.address) {
+    y += 5;
+    const splitAddr = pdf.splitTextToSize(clientDetails.address, 90);
+    pdf.text(splitAddr, 16, y);
+    y += (splitAddr.length - 1) * 5;
+  }
+  if (clientDetails?.gstNumber) {
+    y += 5;
+    pdf.text(`GST: ${clientDetails.gstNumber}`, 16, y);
+  }
+  if (clientDetails?.phone || clientDetails?.email) {
+    y += 5;
+    pdf.text(`${clientDetails.phone || ""} ${clientDetails.email ? " | " + clientDetails.email : ""}`.trim(), 16, y);
+  }
 
   // ── Column headers ──────────────────────────
   y += 18;
@@ -152,17 +184,34 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
   pdf.setFont("helvetica", "normal");
   y += 18;
 
-  // ── Terms & Conditions ──────────────────────
-  if (y > 240) {
+  // ── Terms & Conditions & Bank ────────────────
+  if (y > 230) {
     pdf.addPage();
     y = 20;
   }
-  pdf.setFontSize(8);
-  pdf.setTextColor(120, 115, 135);
+  
+  if (company?.bankAccount) {
+    pdf.setFontSize(9);
+    pdf.setTextColor(35, 31, 53);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("BANK DETAILS:", 16, y);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(105, 99, 120);
+    y += 4;
+    const splitBank = pdf.splitTextToSize(company.bankAccount, 120);
+    pdf.text(splitBank, 16, y);
+    y += splitBank.length * 4 + 4;
+  }
+
+  pdf.setFontSize(9);
+  pdf.setTextColor(35, 31, 53);
   pdf.setFont("helvetica", "bold");
   pdf.text("TERMS & CONDITIONS:", 16, y);
   pdf.setFont("helvetica", "normal");
-  y += 5;
+  pdf.setFontSize(8);
+  pdf.setTextColor(105, 99, 120);
+  y += 4;
   const splitTerms = pdf.splitTextToSize(brand.terms || "Standard delivery and quotation terms apply.", 120);
   pdf.text(splitTerms, 16, y);
 

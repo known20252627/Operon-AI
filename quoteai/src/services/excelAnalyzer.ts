@@ -43,70 +43,155 @@ export async function analyzeExcelTemplate(base64Data: string): Promise<ExcelTem
     gst?: number;
     amount?: number;
   } = {};
+  let clientDetailsCoords: ExcelTemplateMapping["clientDetailsCoords"] = undefined;
+  let quotationNoCoords: ExcelTemplateMapping["quotationNoCoords"] = undefined;
+  let dateCoords: ExcelTemplateMapping["dateCoords"] = undefined;
+  let companyNameCoords: ExcelTemplateMapping["companyNameCoords"] = undefined;
 
   const maxScanRows = Math.min(worksheet.rowCount || 50, 50);
 
-  // 1. Detect Header Row and Column Mappings
-  for (let r = 1; r <= maxScanRows; r++) {
-    const row = worksheet.getRow(r);
-    let matchCount = 0;
-    const tempColMap: typeof colMap = {};
-
-    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
-      const val = cell.value ? String(cell.value).toUpperCase().trim() : "";
-      if (!val) return;
-
-      if (/^(SR|SL|S\.?\s*NO|NO\.|SR\.\s*NO|SL\.\s*NO|SNO)/.test(val)) {
-        tempColMap.srNo = colNumber;
-        matchCount++;
-      } else if (/^(PRODUCT|ITEM|DESCRIPTION|PARTICULARS|NAME|SPECIFICATION|EQUIPMENT|GOODS|DETAILS)/.test(val)) {
-        tempColMap.product = colNumber;
-        matchCount++;
-      } else if (/^(SKU|MODEL|CODE|PART|CATALOG|ITEM\s*CODE)/.test(val)) {
-        tempColMap.sku = colNumber;
-        matchCount++;
-      } else if (/^(QTY|QUANTITY|PIECES|UNITS|NOS|QUANT)/.test(val)) {
-        tempColMap.qty = colNumber;
-        matchCount++;
-      } else if (/^(RATE|PRICE|UNIT\s*COST|COST|UNIT\s*PRICE|RATE\s*\(₹\)|PRICE\s*\(₹\))/i.test(val)) {
-        tempColMap.rate = colNumber;
-        matchCount++;
-      } else if (/^(GST|TAX|IGST|CGST|SGST|GST\s*%|TAX\s*%)/.test(val)) {
-        tempColMap.gst = colNumber;
-        matchCount++;
-      } else if (/^(AMOUNT|TOTAL|VALUE|NET|NET\s*VALUE|TOTAL\s*\(₹\)|AMOUNT\s*\(₹\)|TOTAL\s*PRICE)/.test(val)) {
-        tempColMap.amount = colNumber;
-        matchCount++;
+  // --- AI Mapping Attempt ---
+  try {
+    // Build a labeled grid like "R1: val,val,val\nR2: val,val..."
+    const gridLines: string[] = [];
+    for (let r = 1; r <= maxScanRows; r++) {
+      const row = worksheet.getRow(r);
+      const rowVals: string[] = [];
+      for (let c = 1; c <= 15; c++) {
+        const cell = row.getCell(c);
+        let val = "";
+        if (cell.value !== null && cell.value !== undefined) {
+          val = String(cell.value).replace(/\r?\n/g, " ").replace(/"/g, "'").trim();
+        }
+        if (val.includes(",")) val = `"${val}"`;
+        rowVals.push(val);
       }
+      // Only include rows that have at least some content
+      const hasContent = rowVals.some(v => v !== "");
+      gridLines.push(`R${r}: ${rowVals.join(",")}`);
+      // Stop if we've seen 5+ empty rows in a row after content
+      if (!hasContent && r > 10) {
+        let emptyStreak = 0;
+        for (let check = r; check >= Math.max(1, r - 4); check--) {
+          const checkRow = worksheet.getRow(check);
+          let checkEmpty = true;
+          checkRow.eachCell({ includeEmpty: false }, () => { checkEmpty = false; });
+          if (checkEmpty) emptyStreak++;
+        }
+        if (emptyStreak >= 5) break;
+      }
+    }
+
+    const gridData = gridLines.join("\n");
+
+    const res = await fetch("/api/analyze-template", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gridData })
     });
 
-    // If we matched at least 2 distinct table headers, we found the table header row!
-    if (matchCount >= 2 && (tempColMap.product !== undefined || tempColMap.amount !== undefined || tempColMap.rate !== undefined)) {
-      headerRowIndex = r;
-      Object.assign(colMap, tempColMap);
-      break;
+    if (res.ok) {
+      const aiMapping = await res.json();
+      if (aiMapping.headerRowIndex && aiMapping.columns) {
+        headerRowIndex = aiMapping.headerRowIndex;
+        // Only copy non-null column values from AI
+        const aiCols = aiMapping.columns;
+        if (aiCols.srNo) colMap.srNo = aiCols.srNo;
+        if (aiCols.product) colMap.product = aiCols.product;
+        if (aiCols.sku) colMap.sku = aiCols.sku;
+        if (aiCols.qty) colMap.qty = aiCols.qty;
+        if (aiCols.rate) colMap.rate = aiCols.rate;
+        if (aiCols.gst) colMap.gst = aiCols.gst;
+        if (aiCols.amount) colMap.amount = aiCols.amount;
+
+        if (aiMapping.clientDetailsCoords?.nameRow) {
+          clientDetailsCoords = aiMapping.clientDetailsCoords;
+        }
+        if (aiMapping.quotationNoCoords?.row) {
+          quotationNoCoords = aiMapping.quotationNoCoords;
+        }
+        if (aiMapping.dateCoords?.row) {
+          dateCoords = aiMapping.dateCoords;
+        }
+        if (aiMapping.companyNameCoords?.row) {
+          companyNameCoords = aiMapping.companyNameCoords;
+        }
+        console.log("✅ AI Successfully mapped Excel template:", JSON.stringify(aiMapping, null, 2));
+      }
+    } else {
+      const errBody = await res.text();
+      console.warn("AI Mapping returned non-OK status:", res.status, errBody);
     }
+  } catch (err) {
+    console.error("AI Mapping failed, falling back to regex:", err);
   }
 
-  // Fallback if no header row was detected cleanly
-  if (headerRowIndex === -1) {
-    headerRowIndex = 11; // Standard enterprise fallback row
-    colMap.srNo = 1;
-    colMap.product = 2;
-    colMap.sku = 3;
-    colMap.qty = 4;
-    colMap.rate = 5;
-    colMap.gst = 6;
-    colMap.amount = 7;
-  } else {
-    // Fill in missing column defaults based on relative offsets
+  // --- Fill in missing required columns with intelligent defaults ---
+  if (headerRowIndex !== -1 && (!colMap.product || !colMap.qty || !colMap.rate || !colMap.amount)) {
     const baseCol = colMap.product || colMap.srNo ? (colMap.srNo ? colMap.srNo + 1 : 2) : 2;
     if (!colMap.product) colMap.product = baseCol;
-    if (!colMap.sku) colMap.sku = colMap.product + 1;
-    if (!colMap.qty) colMap.qty = colMap.sku + 1;
+    if (!colMap.qty) colMap.qty = (colMap.sku || colMap.product) + 1;
     if (!colMap.rate) colMap.rate = colMap.qty + 1;
     if (!colMap.gst) colMap.gst = colMap.rate + 1;
-    if (!colMap.amount) colMap.amount = colMap.gst + 1;
+    if (!colMap.amount) colMap.amount = (colMap.gst || colMap.rate) + 1;
+  }
+
+  // --- Regex Fallback if AI Failed ---
+  if (headerRowIndex === -1) {
+    console.log("Using Regex Fallback for template mapping...");
+    for (let r = 1; r <= maxScanRows; r++) {
+      const row = worksheet.getRow(r);
+      let matchCount = 0;
+      const tempColMap: typeof colMap = {};
+
+      row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+        const val = cell.value ? String(cell.value).toUpperCase().trim() : "";
+        if (!val) return;
+
+        if (/^(SR|SL|S\.?\s*NO|NO\.|SR\.\s*NO|SL\.\s*NO|SNO)/.test(val)) {
+          tempColMap.srNo = colNumber;
+          matchCount++;
+        } else if (/^(PRODUCT|ITEM|DESCRIPTION|PARTICULARS|NAME|SPECIFICATION|EQUIPMENT|GOODS|DETAILS)/.test(val)) {
+          tempColMap.product = colNumber;
+          matchCount++;
+        } else if (/^(SKU|MODEL|CODE|PART|CATALOG|ITEM\s*CODE)/.test(val)) {
+          tempColMap.sku = colNumber;
+          matchCount++;
+        } else if (/^(QTY|QUANTITY|PIECES|UNITS|NOS|QUANT)/.test(val)) {
+          tempColMap.qty = colNumber;
+          matchCount++;
+        } else if (/^(RATE|PRICE|UNIT\s*COST|COST|UNIT\s*PRICE|RATE\s*\(₹\)|PRICE\s*\(₹\))/i.test(val)) {
+          tempColMap.rate = colNumber;
+          matchCount++;
+        } else if (/^(GST|TAX|IGST|CGST|SGST|GST\s*%|TAX\s*%)/.test(val)) {
+          tempColMap.gst = colNumber;
+          matchCount++;
+        } else if (/^(AMOUNT|TOTAL|VALUE|NET|NET\s*VALUE|TOTAL\s*\(₹\)|AMOUNT\s*\(₹\)|TOTAL\s*PRICE)/.test(val)) {
+          tempColMap.amount = colNumber;
+          matchCount++;
+        }
+      });
+
+      if (matchCount >= 2 && (tempColMap.product !== undefined || tempColMap.amount !== undefined || tempColMap.rate !== undefined)) {
+        headerRowIndex = r;
+        Object.assign(colMap, tempColMap);
+        break;
+      }
+    }
+
+    if (headerRowIndex === -1) {
+      headerRowIndex = 11;
+      colMap.srNo = 1; colMap.product = 2; colMap.sku = 3; colMap.qty = 4;
+      colMap.rate = 5; colMap.gst = 6; colMap.amount = 7;
+    } else {
+      const baseCol = colMap.product || colMap.srNo ? (colMap.srNo ? colMap.srNo + 1 : 2) : 2;
+      if (!colMap.product) colMap.product = baseCol;
+      if (!colMap.sku) colMap.sku = colMap.product + 1;
+      if (!colMap.qty) colMap.qty = colMap.sku + 1;
+      if (!colMap.rate) colMap.rate = colMap.qty + 1;
+      if (!colMap.gst) colMap.gst = colMap.rate + 1;
+      if (!colMap.amount) colMap.amount = colMap.gst + 1;
+    }
   }
 
   const dataStartRowIndex = headerRowIndex + 1;
@@ -185,5 +270,9 @@ export async function analyzeExcelTemplate(base64Data: string): Promise<ExcelTem
     },
     totals,
     companyInfo,
+    clientDetailsCoords,
+    quotationNoCoords,
+    dateCoords,
+    companyNameCoords,
   };
 }
