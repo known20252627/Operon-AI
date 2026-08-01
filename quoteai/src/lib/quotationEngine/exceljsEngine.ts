@@ -61,126 +61,40 @@ function isBlankOrPlaceholder(val: any): boolean {
 }
 
 /**
- * Accurately discovers all horizontal cell merges on a specific row by inspecting cell master structures.
- * Bypasses ExcelJS runtime model bugs where model.merges is unpopulated upon initial file loading.
- */
-function getMergedColumnSpans(worksheet: ExcelJS.Worksheet, rowNum: number): Array<{ startCol: number; endCol: number }> {
-  const spans: Array<{ startCol: number; endCol: number }> = [];
-  const maxCols = Math.max(worksheet.columnCount || 15, 35);
-  let startC = -1;
-  let currentMaster: any = null;
-
-  for (let c = 1; c <= maxCols + 1; c++) {
-    const cell = worksheet.getRow(rowNum).getCell(c);
-    if (c <= maxCols && cell && (cell as any).isMerged && (cell as any).master) {
-      const masterAddr = (cell as any).master.address;
-      if (currentMaster !== masterAddr) {
-        if (startC !== -1 && c - 1 > startC) {
-          spans.push({ startCol: startC, endCol: c - 1 });
-        }
-        startC = c;
-        currentMaster = masterAddr;
-      }
-    } else {
-      if (startC !== -1 && c - 1 > startC) {
-        spans.push({ startCol: startC, endCol: c - 1 });
-      }
-      startC = -1;
-      currentMaster = null;
-    }
-  }
-  return spans;
-}
-
-/**
  * Extracts or converts existing template analysis into standard QuotationEngineMapping,
  * with intelligent column collision prevention.
  */
-function toEngineMapping(mapping: ExcelTemplateMapping, worksheet?: ExcelJS.Worksheet): QuotationEngineMapping {
+function toEngineMapping(mapping: ExcelTemplateMapping): QuotationEngineMapping {
   const clientCoords = mapping.clientDetailsCoords || {};
 
-  let productCol = mapping.columns?.product;
-  let amountCol = mapping.columns?.amount;
+  const productCol = mapping.columns?.product || 1;
+  const amountCol = mapping.columns?.amount || (productCol + 4);
+
   let qtyCol = mapping.columns?.qty;
   let priceCol = mapping.columns?.rate;
   let gstCol = mapping.columns?.gst;
-  let srNoCol: number | undefined = undefined;
-  let startRow = mapping.dataStartRowIndex || (mapping.headerRowIndex ? mapping.headerRowIndex + 1 : 12);
 
-  // Absolute Live Spreadsheet Analysis to override any buggy stored mapping coordinates
-  if (worksheet) {
-    let bestMatches = -1;
-    let trueHeaderRowIndex: number | undefined = mapping.headerRowIndex;
-    const liveCols: {
-      srNo?: number;
-      product?: number;
-      sku?: number;
-      qty?: number;
-      rate?: number;
-      gst?: number;
-      amount?: number;
-    } = {};
-
-    for (let r = 1; r <= Math.min(50, worksheet.rowCount || 50); r++) {
-      const row = worksheet.getRow(r);
-      let currentMatches = 0;
-      const tempCols: typeof liveCols = {};
-
-      row.eachCell({ includeEmpty: false }, (cell, colNum) => {
-        const text = getCellText(cell.value).toUpperCase().trim();
-        if (!text) return;
-        if (/^(SR|SL|S\.?\s*NO|NO\.?|SNO|ITEM\s*NO|NO$)/.test(text) && !/GST/i.test(text)) { tempCols.srNo = colNum; currentMatches++; }
-        else if (/^(PRODUCT|ITEM|DESCRIPTION|PARTICULARS|NAME|SPECIFICATION|GOODS|DETAILS)/.test(text)) { tempCols.product = colNum; currentMatches++; }
-        else if (/^(SKU|MODEL|CODE|PART|ITEM\s*CODE)/.test(text)) { tempCols.sku = colNum; currentMatches++; }
-        else if (/^(QTY|QUANTITY|PIECES|UNITS|NOS)/.test(text)) { tempCols.qty = colNum; currentMatches++; }
-        else if (/^(RATE|PRICE|UNIT\s*COST|COST|UNIT\s*PRICE)/.test(text)) { tempCols.rate = colNum; currentMatches++; }
-        else if (/GST|IGST|CGST|SGST|TAX/.test(text) && !/GSTIN|GST\s*NO/.test(text)) { tempCols.gst = colNum; currentMatches++; }
-        else if (/^(AMOUNT|TOTAL|VALUE|NET)/.test(text)) { tempCols.amount = colNum; currentMatches++; }
-      });
-
-      if (currentMatches >= 2 && (tempCols.product !== undefined || tempCols.amount !== undefined) && currentMatches > bestMatches) {
-        bestMatches = currentMatches;
-        trueHeaderRowIndex = r;
-        Object.assign(liveCols, tempCols);
-      }
-    }
-
-    if (bestMatches >= 2 && trueHeaderRowIndex) {
-      startRow = trueHeaderRowIndex + 1;
-      if (liveCols.product !== undefined) productCol = liveCols.product;
-      if (liveCols.qty !== undefined) qtyCol = liveCols.qty;
-      if (liveCols.rate !== undefined) priceCol = liveCols.rate;
-      if (liveCols.amount !== undefined) amountCol = liveCols.amount;
-      if (liveCols.gst !== undefined) gstCol = liveCols.gst;
-      if (liveCols.srNo !== undefined) srNoCol = liveCols.srNo;
-    }
-  }
-
-  const resolvedProductCol = productCol || 1;
-  const resolvedAmountCol = amountCol || (resolvedProductCol + 4);
-
-  if (!qtyCol || !priceCol || qtyCol === resolvedAmountCol || priceCol === resolvedAmountCol || qtyCol === resolvedProductCol || priceCol === resolvedProductCol) {
-    if (resolvedAmountCol > resolvedProductCol + 2) {
-      priceCol = resolvedAmountCol - 1;
-      qtyCol = resolvedAmountCol - 2;
+  if (!qtyCol || !priceCol || qtyCol === amountCol || priceCol === amountCol || qtyCol === productCol || priceCol === productCol) {
+    if (amountCol > productCol + 2) {
+      priceCol = amountCol - 1;
+      qtyCol = amountCol - 2;
     } else {
-      qtyCol = resolvedProductCol + 1;
-      priceCol = resolvedProductCol + 2;
+      qtyCol = productCol + 1;
+      priceCol = productCol + 2;
     }
   }
 
-  if (gstCol && (gstCol === resolvedProductCol || gstCol === qtyCol || gstCol === priceCol || gstCol === resolvedAmountCol)) {
+  if (gstCol && (gstCol === productCol || gstCol === qtyCol || gstCol === priceCol || gstCol === amountCol)) {
     gstCol = undefined;
   }
 
   return {
-    productStartRow: startRow,
-    productColumn: resolvedProductCol,
+    productStartRow: mapping.dataStartRowIndex || (mapping.headerRowIndex ? mapping.headerRowIndex + 1 : 12),
+    productColumn: productCol,
     qtyColumn: qtyCol!,
     priceColumn: priceCol!,
     gstColumn: gstCol,
-    amountColumn: resolvedAmountCol,
-    srNoColumn: srNoCol,
+    amountColumn: amountCol,
     customerNameCell: clientCoords.nameRow && clientCoords.nameCol ? { row: clientCoords.nameRow, col: clientCoords.nameCol } : undefined,
     addressCell: clientCoords.addressRow && clientCoords.addressCol ? { row: clientCoords.addressRow, col: clientCoords.addressCol } : undefined,
     quotationNumberCell: mapping.quotationNoCoords?.row && mapping.quotationNoCoords?.col ? { row: mapping.quotationNoCoords.row, col: mapping.quotationNoCoords.col } : undefined,
@@ -382,7 +296,7 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     console.log("✨ Merged Engine: Reusing stored template mapping without re-analysis.");
   }
 
-  const engineMapping: QuotationEngineMapping = toEngineMapping(rawMapping, worksheet);
+  const engineMapping: QuotationEngineMapping = toEngineMapping(rawMapping);
 
   // Apply explicit AI coordinates first
   if (engineMapping.customerNameCell) {
@@ -428,45 +342,58 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
   const itemsCount = model.products.length;
   let rowsInserted = 0;
 
-  // Issue 1 & 2: Non-destructive row splicing and universal styling enforcement
+  // Issue 1 & 2: Non-destructive insertion & identical style inheritance
   if (itemsCount > sampleRowCount) {
     rowsInserted = itemsCount - sampleRowCount;
+    const sampleRefRow = worksheet.getRow(startRow); // Copy strictly from pure sample product row
+
+    // Splice new empty rows exactly between product table end and footer start
     worksheet.spliceRows(origEndRow + 1, 0, ...new Array(rowsInserted).fill([]));
+
+    // Deep copy all styling, font, fill, border, height, and number formats
+    for (let i = 1; i <= rowsInserted; i++) {
+      const targetRowNumber = origEndRow + i;
+      const targetRow = worksheet.getRow(targetRowNumber);
+      targetRow.height = sampleRefRow.height;
+
+      sampleRefRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+        const targetCell = targetRow.getCell(colIdx);
+        if (cell.style) {
+          targetCell.style = Object.assign({}, cell.style);
+          if (cell.font) targetCell.font = JSON.parse(JSON.stringify(cell.font));
+          if (cell.fill) targetCell.fill = JSON.parse(JSON.stringify(cell.fill));
+          if (cell.border) targetCell.border = JSON.parse(JSON.stringify(cell.border));
+          if (cell.alignment) targetCell.alignment = JSON.parse(JSON.stringify(cell.alignment));
+        }
+        if (cell.numFmt) targetCell.numFmt = cell.numFmt;
+      });
+    }
+
+    // Replicate merged cells for newly inserted product rows
+    const existingMerges = (worksheet.model.merges || []).slice();
+    existingMerges.forEach((mergeRange) => {
+      const match = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i.exec(mergeRange);
+      if (match) {
+        const startCol = match[1];
+        const mergeStartR = parseInt(match[2], 10);
+        const endCol = match[3];
+        const mergeEndR = parseInt(match[4], 10);
+        if (mergeStartR === startRow && mergeEndR === startRow) {
+          for (let i = 1; i <= rowsInserted; i++) {
+            const tr = origEndRow + i;
+            try {
+              worksheet.mergeCells(`${startCol}${tr}:${endCol}${tr}`);
+            } catch {
+              // ignore if overlap occurs
+            }
+          }
+        }
+      }
+    });
   }
 
   const actualEndRow = startRow + Math.max(itemsCount, sampleRowCount) - 1;
   const shiftedFooterStart = footerStartRow + rowsInserted;
-
-  // Enforce 100% style, border, font, alignment, height, and merge parity across ALL product rows
-  const sampleRefRow = worksheet.getRow(startRow);
-  const maxCols = Math.max(worksheet.columnCount || 15, 35);
-  const rowMerges = getMergedColumnSpans(worksheet, startRow);
-
-  for (let r = startRow + 1; r <= actualEndRow; r++) {
-    const targetRow = worksheet.getRow(r);
-    targetRow.height = sampleRefRow.height;
-
-    for (let c = 1; c <= maxCols; c++) {
-      const sourceCell = sampleRefRow.getCell(c);
-      const targetCell = targetRow.getCell(c);
-      if (sourceCell.style) {
-        targetCell.style = JSON.parse(JSON.stringify(sourceCell.style));
-      }
-      if (sourceCell.font) targetCell.font = JSON.parse(JSON.stringify(sourceCell.font));
-      if (sourceCell.fill) targetCell.fill = JSON.parse(JSON.stringify(sourceCell.fill));
-      if (sourceCell.border) targetCell.border = JSON.parse(JSON.stringify(sourceCell.border));
-      if (sourceCell.alignment) targetCell.alignment = JSON.parse(JSON.stringify(sourceCell.alignment));
-      if (sourceCell.numFmt) targetCell.numFmt = sourceCell.numFmt;
-    }
-
-    rowMerges.forEach((span) => {
-      try {
-        worksheet.mergeCells(r, span.startCol, r, span.endCol);
-      } catch {
-        // ignore if already merged or out of bounds
-      }
-    });
-  }
 
   // Issue 4: Preserve Print Layout, Page Breaks, and scale Print Area cleanly
   if (worksheet.pageSetup && worksheet.pageSetup.printArea && rowsInserted > 0) {
@@ -478,20 +405,9 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     }
   }
 
-  // Use discovered serial column or check if there is a Serial Number column before productColumn on startRow (e.g. Col 1)
-  let serialCol: number | undefined = engineMapping.srNoColumn;
-  if (!serialCol && engineMapping.productColumn > 1) {
-    for (let c = 1; c < engineMapping.productColumn; c++) {
-      const val = getCellText(sampleRefRow.getCell(c).value);
-      if (/^#?\s*0*1\s*$/.test(val) || c === 1) {
-        serialCol = c;
-        break;
-      }
-    }
-  }
-
   // Populate dynamic line items & preserve row calculation formulas
-  const sampleAmountCellVal = sampleRefRow.getCell(engineMapping.amountColumn).value;
+  const referenceSampleRow = worksheet.getRow(startRow);
+  const sampleAmountCellVal = referenceSampleRow.getCell(engineMapping.amountColumn).value;
   let hasNativeAmountFormula = false;
   let templateFormulaStr = "";
 
@@ -506,9 +422,6 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
 
     if (i < itemsCount) {
       const p = model.products[i];
-      if (serialCol !== undefined) {
-        row.getCell(serialCol).value = i + 1;
-      }
       row.getCell(engineMapping.productColumn).value = p.product;
       row.getCell(engineMapping.qtyColumn).value = p.qty;
       row.getCell(engineMapping.priceColumn).value = p.rate;
@@ -533,21 +446,11 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
         };
       }
     } else {
-      if (serialCol !== undefined) row.getCell(serialCol).value = null;
       row.getCell(engineMapping.productColumn).value = null;
       row.getCell(engineMapping.qtyColumn).value = null;
       row.getCell(engineMapping.priceColumn).value = null;
       if (engineMapping.gstColumn) row.getCell(engineMapping.gstColumn).value = null;
       row.getCell(engineMapping.amountColumn).value = null;
-    }
-
-    // Enforce alignment and border retention so setting cell values never disturbs row layout
-    for (let c = 1; c <= maxCols; c++) {
-      const refCell = sampleRefRow.getCell(c);
-      const curCell = row.getCell(c);
-      if (refCell.alignment) curCell.alignment = JSON.parse(JSON.stringify(refCell.alignment));
-      if (refCell.border) curCell.border = JSON.parse(JSON.stringify(refCell.border));
-      if (refCell.font && !curCell.font) curCell.font = JSON.parse(JSON.stringify(refCell.font));
     }
   }
 
@@ -766,12 +669,12 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
     });
   }
 
-  // Issue 5: Validate the final workbook before saving (self-healing without fatal legacy fallback)
+  // Issue 5: Validate the final workbook before saving
   const validationReport = validateFinalWorkbook(model, worksheet, engineMapping, actualEndRow);
   if (!validationReport.valid) {
-    const errorSummary = `ExcelJS Engine Final Workbook Validation:\n` + validationReport.errors.map((e) => `• ${e}`).join("\n");
+    const errorSummary = `ExcelJS Engine Final Workbook Validation Failed:\n` + validationReport.errors.map((e) => `• ${e}`).join("\n");
     console.warn("⚠️ " + errorSummary);
-    warnings.push(...validationReport.errors);
+    throw new Error(errorSummary);
   }
 
   const outputBuffer = await workbook.xlsx.writeBuffer();
