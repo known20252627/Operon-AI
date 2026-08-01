@@ -61,7 +61,7 @@ export function ExportDesignModal({
               date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
             });
           } else {
-            await downloadQuotationExcel({
+            const res = await downloadQuotationExcel({
               brand: exportBrand,
               company: company,
               items: quote.items || [],
@@ -73,6 +73,7 @@ export function ExportDesignModal({
               clientDetails: quote.clientDetails,
               date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
             });
+            res?.warnings?.forEach((w) => notify(w));
           }
         }
 

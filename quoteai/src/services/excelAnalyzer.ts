@@ -104,7 +104,13 @@ export async function analyzeExcelTemplate(base64Data: string): Promise<ExcelTem
         if (aiCols.gst) colMap.gst = aiCols.gst;
         if (aiCols.amount) colMap.amount = aiCols.amount;
 
-        if (aiMapping.clientDetailsCoords?.nameRow) {
+        if (
+          aiMapping.clientDetailsCoords &&
+          (aiMapping.clientDetailsCoords.nameRow ||
+            aiMapping.clientDetailsCoords.addressRow ||
+            aiMapping.clientDetailsCoords.gstRow ||
+            aiMapping.clientDetailsCoords.phoneRow)
+        ) {
           clientDetailsCoords = aiMapping.clientDetailsCoords;
         }
         if (aiMapping.quotationNoCoords?.row) {

@@ -26,17 +26,16 @@ import { DesignModal } from "@/components/tools/DesignModal";
 import { SettingsModal } from "@/components/tools/SettingsModal";
 
 // AI & OCR
-import { AICopilot } from "@/components/ai/AICopilot";
 import { OCRHub } from "@/components/ocr/OCRHub";
 import { autoLearnProductsFromQuoteItems } from "@/services/inventory";
 import { getBrandSettings, saveBrandSettings } from "@/services/brand";
 import { addQuotation } from "@/services/quotations";
 
 // Enterprise Views
-import { CustomerTimeline } from "@/components/customers/CustomerTimeline";
 import { ProductsView } from "@/components/products/ProductsView";
 import { QuotationsView } from "@/components/quotation/QuotationsView";
 import { AnalyticsView } from "@/components/analytics/AnalyticsView";
+import { AIMarketingView } from "@/components/marketing/AIMarketingView";
 
 // Search
 import { CommandPalette } from "@/components/search/CommandPalette";
@@ -56,11 +55,11 @@ import { DEFAULT_COMPANY, DEFAULT_BRAND } from "@/lib/constants";
 export default function Home() {
   // ── Navigation ──────────────────────────────
   const [active, setActive] = useState<ActiveView>("Overview");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // ── Modals ──────────────────────────────────
   const [showWorkspace, setShowWorkspace] = useState(false);
   const [tool, setTool] = useState<ToolType>(null);
-  const [showCopilot, setShowCopilot] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [pendingScanItems, setPendingScanItems] = useState<QuoteItem[] | null>(null);
@@ -91,8 +90,8 @@ export default function Home() {
   const shortcuts = useMemo(
     () => ({
       "mod+k": () => setShowCommandPalette((p) => !p),
-      "mod+j": () => setShowCopilot((p) => !p),
       "mod+n": () => setShowWorkspace(true),
+      "mod+b": () => setSidebarCollapsed((p) => !p),
     }),
     []
   );
@@ -101,12 +100,10 @@ export default function Home() {
   // ── Callbacks ───────────────────────────────
   const openWorkspace = useCallback(() => {
     setShowWorkspace(true);
-    setActive("AI Workspace");
   }, []);
 
   const handleNavigate = useCallback((view: ActiveView) => {
     setActive(view);
-    if (view === "AI Workspace") setShowWorkspace(true);
   }, []);
 
   const handleScanFromWorkspace = useCallback(() => {
@@ -164,17 +161,17 @@ export default function Home() {
 
   // ── Render ──────────────────────────────────
   return (
-    <main className={`app-shell`} data-theme={theme}>
+    <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-theme={theme}>
       {/* ── Sidebar ─────────────────────────── */}
       <Sidebar
         active={active}
         onNavigate={handleNavigate}
         onSettings={() => setTool("settings")}
-        onToggleCopilot={() => setShowCopilot((p) => !p)}
+        collapsed={sidebarCollapsed}
       />
 
       {/* ── Main Content ────────────────────── */}
-      <section className={`content ${showCopilot ? "with-copilot" : ""}`}>
+      <section className="content">
         <Topbar
           active={active}
           onNewQuote={openWorkspace}
@@ -183,6 +180,8 @@ export default function Home() {
           theme={theme}
           notificationCount={3}
           onNotifications={() => setShowNotifications((p) => !p)}
+          isSidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed((p) => !p)}
         />
 
         {/* Notification dropdown */}
@@ -250,16 +249,17 @@ export default function Home() {
             onNewQuote={() => setShowWorkspace(true)}
           />
         )}
-        {active === "Customers" && <CustomerTimeline />}
         {active === "Products" && <ProductsView />}
         {active === "Follow-ups" && <FollowUpsPanel expanded />}
         {active === "Analytics" && <AnalyticsView />}
+        {active === "AI Marketing" && (
+          <AIMarketingView
+            company={company}
+            onCompanyChange={setCompany}
+            notify={notify}
+          />
+        )}
       </section>
-
-      {/* ── AI Copilot (Right Panel) ────────── */}
-      {showCopilot && (
-        <AICopilot onClose={() => setShowCopilot(false)} />
-      )}
 
       {/* ── Workspace Modal ─────────────────── */}
       {showWorkspace && (

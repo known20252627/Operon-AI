@@ -7,12 +7,11 @@
 export type ActiveView =
   | "Overview"
   | "OCR Hub"
-  | "AI Workspace"
   | "Quotations"
-  | "Customers"
   | "Products"
   | "Follow-ups"
-  | "Analytics";
+  | "Analytics"
+  | "AI Marketing";
 
 export interface NavItem {
   name: ActiveView;
@@ -98,6 +97,7 @@ export interface CompanySettings {
   email: string;
   defaultGst: string;
   bankAccount: string;
+  businessDescription?: string;
 }
 
 // ── Products ────────────────────────────────

@@ -1,6 +1,10 @@
-﻿## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\app\api\analyze-template\route.ts
+# QuoteAI — Full Codebase Reference
 
-`	ypescript
+Last updated: 2026-08-01 23:34:36
+
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\app\api\analyze-template\route.ts
+
+```tsx
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
@@ -93,7 +97,7 @@ Return ONLY the raw JSON. No markdown, no explanation, no comments.`;
     const aiOutput = response.choices[0].message.content;
     const parsed = JSON.parse(aiOutput || "{}");
 
-    console.log("ðŸ¤– AI Template Analysis Result:", JSON.stringify(parsed, null, 2));
+    console.log("🤖 AI Template Analysis Result:", JSON.stringify(parsed, null, 2));
 
     return NextResponse.json(parsed);
   } catch (error: unknown) {
@@ -102,12 +106,3613 @@ Return ONLY the raw JSON. No markdown, no explanation, no comments.`;
     return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }
+```
 
-``n
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\app\api\generate-marketing-message\route.ts
+
+```tsx
+import { NextResponse } from "next/server";
+import OpenAI from "openai";
+
+export async function POST(req: Request) {
+  try {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey || apiKey === "PASTE_YOUR_GROQ_API_KEY_HERE") {
+      return NextResponse.json(
+        { error: "Groq API key not configured. Please add GROQ_API_KEY to your .env.local file." },
+        { status: 500 }
+      );
+    }
+
+    const openai = new OpenAI({
+      apiKey: apiKey,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
+
+    const body = await req.json();
+    const {
+      businessDescription,
+      messageIntent,
+      channel,
+      tone,
+    } = body as {
+      businessDescription?: string;
+      messageIntent: string;
+      channel: "whatsapp" | "email" | "instagram";
+      tone?: string;
+    };
+
+    if (!messageIntent || !channel) {
+      return NextResponse.json(
+        { error: "Missing required fields: messageIntent and channel." },
+        { status: 400 }
+      );
+    }
+
+    const toneInstruction = tone
+      ? `Use a ${tone} tone — but always remain professional and business-appropriate.`
+      : "Use a strictly professional, polished, and corporate tone throughout.";
+
+    const businessContext = businessDescription?.trim()
+      ? `\n\nBusiness Context:\n${businessDescription}`
+      : "";
+
+    let prompt: string;
+
+    if (channel === "whatsapp") {
+      prompt = `You are a senior B2B marketing copywriter. Write a professional WhatsApp broadcast message for a business audience.
+
+Rules:
+- Keep it under 500 characters total.
+- Use at most 1–2 subtle, relevant emojis. Do NOT spam emojis.
+- Maintain a polished, professional, corporate tone — this is a B2B message, not casual chat.
+- Do NOT use slang, exclamation marks excessively, or overly salesy language.
+- Do NOT include a subject line.
+- End with a clear, professional call-to-action (e.g. "Reach out for a quote" or "Contact us to learn more").
+- ${toneInstruction}${businessContext}
+
+What the message should be about:
+${messageIntent}
+
+Return ONLY the WhatsApp message text. No explanation, no quotes around it, no markdown.`;
+
+    } else if (channel === "email") {
+      prompt = `You are a senior B2B marketing copywriter. Write a professional marketing email for a business audience.
+
+Rules:
+- First line must be the subject line, prefixed with exactly "Subject: "
+- Then one blank line.
+- Then the email body: 3–5 short, professional paragraphs, under 300 words total.
+- Maintain a formal, polished, corporate tone throughout — no casual language.
+- Do NOT use excessive bullet points, exclamation marks, or emojis — write clean, flowing paragraphs.
+- ${toneInstruction}
+- End with a professional call-to-action and a courteous sign-off.${businessContext}
+
+What the message should be about:
+${messageIntent}
+
+Return ONLY: the subject line (prefixed "Subject: "), a blank line, then the email body. No extra explanation.`;
+
+    } else {
+      // Instagram
+      prompt = `You are a senior B2B social media copywriter. Write a professional Instagram caption for a business page.
+
+Rules:
+- Keep the main caption under 300 characters (before hashtags).
+- Use 1–2 relevant emojis — keep it clean and professional, not casual.
+- Maintain a confident, authoritative, corporate tone suitable for a business Instagram page.
+- Add a line break then 5–8 relevant industry hashtags on a new line.
+- ${toneInstruction}${businessContext}
+
+What the post should be about:
+${messageIntent}
+
+Return ONLY the Instagram caption with hashtags. No extra explanation.`;
+    }
+
+    const response = await openai.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+    });
+
+    const rawText = response.choices[0].message.content || "";
+
+    if (channel === "email") {
+      const lines = rawText.split("\n");
+      const subjectLine = lines[0]?.replace(/^subject:\s*/i, "").trim() || "";
+      const bodyLines = lines.slice(1);
+      // Skip leading blank line after subject
+      const firstNonBlank = bodyLines.findIndex((l) => l.trim().length > 0);
+      const body = bodyLines.slice(firstNonBlank).join("\n").trim();
+      return NextResponse.json({ message: body, subject: subjectLine });
+    }
+
+    return NextResponse.json({ message: rawText.trim() });
+  } catch (error: unknown) {
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("Marketing Message Generation Error:", errMsg);
+    return NextResponse.json({ error: errMsg }, { status: 500 });
+  }
+}
+```
+
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\app\globals.css
+
+```tsx
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+/* ── Design Tokens ─────────────────────────── */
+
+:root {
+  /* Core palette - Crisp Executive SaaS */
+  --ink: #100f1c;
+  --ink-secondary: #3b364e;
+  --muted: #6e6985;
+  --line: #e3e0ec;
+  --lav: #6366f1;
+  --lav-light: #8b5cf6;
+  --lav-dark: #4f46e5;
+  --soft: #f4f3fa;
+  --surface: #ffffff;
+  --bg: #f8f8fc;
+
+  /* Semantic */
+  --green: #10b981;
+  --green-bg: #ecfdf5;
+  --green-border: #a7f3d0;
+  --amber: #f59e0b;
+  --amber-bg: #fffbeb;
+  --amber-border: #fde68a;
+  --red: #ef4444;
+  --red-bg: #fef2f2;
+  --red-border: #fecaca;
+  --blue: #3b82f6;
+  --blue-bg: #eff6ff;
+
+  /* Spacing & Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 9999px;
+
+  /* Shadows - Luminous & Refined */
+  --shadow-sm: 0 2px 8px -2px rgba(23, 17, 42, 0.05);
+  --shadow-md: 0 10px 25px -4px rgba(99, 102, 241, 0.15);
+  --shadow-lg: 0 20px 45px -8px rgba(31, 23, 76, 0.18);
+  --shadow-xl: 0 30px 90px -12px rgba(23, 17, 42, 0.35);
+
+  /* Transitions */
+  --ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --duration: 250ms;
+
+  /* Sidebar */
+  --sidebar-width: 255px;
+
+  /* Copilot */
+  --copilot-width: 380px;
+
+  /* Font */
+  --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+
+/* ── Dark Mode Tokens ──────────────────────── */
+
+[data-theme="dark"] {
+  /* Ultra-sleek Obsidian & Neon Lavender */
+  --ink: #f2efff;
+  --ink-secondary: #c9c4db;
+  --muted: #8e88a5;
+  --line: #262238;
+  --soft: #141122;
+  --surface: #191629;
+  --bg: #0d0a18;
+
+  --green: #34d399;
+  --green-bg: #064e3b;
+  --green-border: #065f46;
+  --amber: #fbbf24;
+  --amber-bg: #451a03;
+  --amber-border: #78350f;
+  --red: #f87171;
+  --red-bg: #450a0a;
+  --red-border: #7f1d1d;
+  --blue: #60a5fa;
+  --blue-bg: #1e3a8a;
+
+  /* Ambient Glowing Dark Shadows */
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 10px 30px rgba(99, 102, 241, 0.22);
+  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.55);
+  --shadow-xl: 0 30px 100px rgba(0, 0, 0, 0.75);
+}
+
+
+/* ── Reset & Base ──────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+}
+
+
+/* ── Sidebar ───────────────────────────────── */
+
+.sidebar {
+  width: var(--sidebar-width);
+  background: var(--surface);
+  border-right: 1px solid var(--line);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 10;
+  transition: width var(--duration) var(--ease);
+  box-shadow: 2px 0 20px rgba(0, 0, 0, 0.02);
+}
+
+.brand {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -1.2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 8px;
+  color: var(--ink);
+}
+
+.brand > span > span {
+  background: linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.brand-mark,
+.mini-logo {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  background: linear-gradient(135deg, #a78bfa 0%, #6366f1 50%, #4f46e5 100%);
+  color: white;
+  border-radius: 10px;
+  font-size: 17px;
+  font-weight: 900;
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.4);
+}
+
+.company-switch {
+  margin: 28px 2px 20px;
+  padding: 12px 10px;
+  border-radius: var(--radius-md);
+  background: var(--soft);
+  border: 1px solid var(--line);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.company-switch:hover {
+  border-color: var(--lav-light);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.12);
+}
+
+.company-switch b,
+.profile b {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  display: block;
+  line-height: 1.3;
+}
+
+.company-switch small,
+.profile small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+  font-weight: 500;
+}
+
+.company-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #dbeafe, #eff6ff);
+  color: #2563eb;
+  font-weight: 800;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+[data-theme="dark"] .company-icon {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(59, 130, 246, 0.1));
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.3);
+}
+
+.chevron {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+
+/* ── Navigation ────────────────────────────── */
+
+.nav-item {
+  border: 0;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 3px 0;
+  cursor: pointer;
+  position: relative;
+  transition: all var(--duration) var(--ease);
+}
+
+.nav-item:hover {
+  background: var(--soft);
+  color: var(--ink);
+  transform: translateX(3px);
+}
+
+.nav-item i {
+  font-style: normal;
+  font-size: 18px;
+  width: 20px;
+  text-align: center;
+  transition: transform var(--duration) var(--ease);
+}
+
+.nav-item:hover i {
+  transform: scale(1.15);
+}
+
+.nav-item.active {
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.14) 0%, rgba(99, 102, 241, 0.04) 100%);
+  color: var(--lav);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 0 var(--lav);
+  transform: translateX(0);
+}
+
+[data-theme="dark"] .nav-item.active {
+  background: linear-gradient(90deg, rgba(139, 92, 246, 0.22) 0%, rgba(139, 92, 246, 0.03) 100%);
+  color: #c4b5fd;
+  box-shadow: inset 3px 0 0 0 #8b5cf6;
+}
+
+.nav-item em {
+  margin-left: auto;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+.sidebar-bottom {
+  margin-top: auto;
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  padding: 16px 8px 0;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: opacity var(--duration) var(--ease);
+}
+
+.profile:hover {
+  opacity: 0.85;
+}
+
+.profile > span {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 3px 10px rgba(79, 70, 229, 0.3);
+}
+
+.profile i {
+  margin-left: auto;
+  font-style: normal;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+
+/* ── Collapsed Sidebar (Icons-Only Mode) ───── */
+
+.sidebar.collapsed {
+  width: 76px;
+  padding: 24px 12px;
+  overflow: hidden;
+}
+
+.sidebar.collapsed .brand {
+  justify-content: center;
+  padding-left: 0;
+  gap: 0;
+}
+
+.sidebar.collapsed .company-switch {
+  justify-content: center;
+  padding: 12px 0;
+  margin: 28px 0 20px;
+  gap: 0;
+}
+
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 12px 0;
+  gap: 0;
+}
+
+.sidebar.collapsed .nav-item:hover {
+  transform: translateY(-2px);
+}
+
+.sidebar.collapsed .nav-item i {
+  width: auto;
+  margin: 0;
+  font-size: 20px;
+}
+
+.sidebar.collapsed .profile {
+  justify-content: center;
+  padding: 16px 0 0;
+  gap: 0;
+}
+
+
+/* ── Content Area ──────────────────────────── */
+
+.content {
+  margin-left: var(--sidebar-width);
+  padding: 32px 46px 60px;
+  width: calc(100% - var(--sidebar-width));
+  max-width: 1750px;
+  transition: margin-left var(--duration) var(--ease), width var(--duration) var(--ease), padding var(--duration) var(--ease);
+}
+
+.app-shell.sidebar-collapsed .content {
+  margin-left: 76px;
+  width: calc(100% - 76px);
+}
+
+
+/* ── Topbar ────────────────────────────────── */
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.eyebrow {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  color: var(--ink);
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 18px;
+  color: var(--ink-secondary);
+  position: relative;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: all var(--duration) var(--ease);
+  box-shadow: var(--shadow-sm);
+}
+
+.icon-button:hover {
+  border-color: var(--lav);
+  color: var(--lav);
+  background: var(--soft);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.notification span {
+  width: 8px;
+  height: 8px;
+  background: var(--red);
+  border: 1.5px solid var(--surface);
+  position: absolute;
+  border-radius: var(--radius-full);
+  right: 9px;
+  top: 9px;
+  box-shadow: 0 0 8px var(--red);
+}
+
+.new-quote,
+.analyze,
+.create-quote {
+  border: 0;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 11px 18px;
+  cursor: pointer;
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35);
+  transition: all var(--duration) var(--ease);
+}
+
+.new-quote:hover,
+.analyze:hover,
+.create-quote:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  box-shadow: 0 8px 25px rgba(99, 102, 241, 0.55);
+  transform: translateY(-2px);
+}
+
+
+/* ── Hero Card Banner ──────────────────────── */
+
+.hero-card {
+  min-height: 290px;
+  border-radius: var(--radius-xl);
+  background: linear-gradient(135deg, #100a26 0%, #221454 45%, #4c26a5 100%);
+  border: 1px solid rgba(167, 139, 250, 0.25);
+  position: relative;
+  overflow: hidden;
+  color: white;
+  padding: 38px 46px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 20px 55px -10px rgba(23, 13, 58, 0.45);
+}
+
+.hero-copy {
+  position: relative;
+  z-index: 2;
+  max-width: 540px;
+}
+
+.ai-pill {
+  font-size: 11px;
+  letter-spacing: 0.8px;
+  font-weight: 700;
+  color: #ddd6fe;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(196, 181, 253, 0.25);
+  padding: 6px 14px;
+  border-radius: 999px;
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.2);
+  backdrop-filter: blur(8px);
+  margin-bottom: 8px;
+}
+
+.ai-pill b {
+  color: #c084fc;
+  font-size: 14px;
+  filter: drop-shadow(0 0 6px #c084fc);
+}
+
+.hero-copy h2 {
+  font-size: 33px;
+  font-weight: 800;
+  line-height: 1.18;
+  letter-spacing: -1.2px;
+  margin: 12px 0 12px;
+  color: #ffffff;
+}
+
+.hero-copy h2 i {
+  font-style: normal;
+  font-weight: 800;
+  background: linear-gradient(90deg, #c4b5fd 0%, #67e8f9 50%, #f472b6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 10px rgba(196, 181, 253, 0.3));
+}
+
+.hero-copy p {
+  color: #c7beea;
+  line-height: 1.6;
+  margin: 0 0 22px;
+  font-size: 13.5px;
+  font-weight: 400;
+}
+
+.hero-copy button {
+  background: #ffffff;
+  color: #1e1b4b;
+  font-weight: 800;
+  padding: 12px 22px;
+  font-size: 13px;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  box-shadow: 0 8px 24px rgba(255, 255, 255, 0.25);
+  transition: all var(--duration) var(--ease);
+}
+
+.hero-copy button:hover {
+  background: #f8fafc;
+  transform: translateY(-3px);
+  box-shadow: 0 12px 30px rgba(255, 255, 255, 0.4);
+}
+
+.hero-copy button span {
+  margin-left: 10px;
+  color: #6366f1;
+  font-size: 16px;
+  transition: transform var(--duration) var(--ease);
+}
+
+.hero-copy button:hover span {
+  transform: translateX(4px);
+}
+
+.hero-visual {
+  position: absolute;
+  right: 40px;
+  inset-block: 0;
+  width: 420px;
+  pointer-events: none;
+}
+
+.orb {
+  position: absolute;
+  border-radius: var(--radius-full);
+  filter: blur(30px);
+}
+
+.orb-one {
+  width: 320px;
+  height: 320px;
+  right: 0px;
+  top: -60px;
+  background: radial-gradient(
+    circle,
+    rgba(167, 139, 250, 0.55) 0%,
+    rgba(99, 102, 241, 0.3) 50%,
+    transparent 75%
+  );
+  animation: orb-float 8s ease-in-out infinite;
+}
+
+.orb-two {
+  width: 280px;
+  height: 280px;
+  right: 140px;
+  bottom: -100px;
+  background: radial-gradient(
+    circle,
+    rgba(236, 72, 153, 0.35) 0%,
+    rgba(139, 92, 246, 0.25) 50%,
+    transparent 80%
+  );
+  animation: orb-float 10s ease-in-out infinite reverse;
+}
+
+.quote-preview {
+  position: absolute;
+  right: 55px;
+  top: 42px;
+  width: 195px;
+  height: 225px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  color: #1e1b4b;
+  padding: 20px;
+  box-shadow: 0 25px 50px rgba(10, 5, 28, 0.4);
+  transform: rotate(4deg);
+  animation: float-card 6s ease-in-out infinite;
+}
+
+[data-theme="dark"] .quote-preview {
+  background: rgba(26, 20, 48, 0.85);
+  border-color: rgba(167, 139, 250, 0.3);
+  color: #ffffff;
+}
+
+.preview-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 8px;
+  font-weight: bold;
+  color: #766ca0;
+}
+
+.preview-top .mini-logo {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  border-radius: 5px;
+}
+
+.preview-lines {
+  margin-top: 22px;
+}
+
+.preview-lines i {
+  display: block;
+  height: 5px;
+  background: #ece9f4;
+  border-radius: 4px;
+  margin: 10px 0;
+}
+
+.preview-lines i:nth-child(1) { width: 80%; }
+.preview-lines i:nth-child(3) { width: 65%; }
+
+.preview-total {
+  position: absolute;
+  bottom: 22px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.preview-total small {
+  display: block;
+  font-size: 8px;
+  color: #aaa4b6;
+  margin-top: 4px;
+  font-weight: normal;
+}
+
+.spark {
+  position: absolute;
+  right: 0;
+  top: 30px;
+  font-size: 29px;
+  color: #e7dbff;
+  animation: spark-pulse 3s ease-in-out infinite;
+}
+
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.stat-card,
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  transition: all var(--duration) var(--ease);
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-card {
+  padding: 22px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--lav), #a855f7);
+  opacity: 0;
+  transition: opacity var(--duration) var(--ease);
+}
+
+.stat-card:hover::before {
+  opacity: 1;
+}
+
+.stat-card:hover {
+  border-color: var(--lav);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-4px);
+}
+
+.stat-icon {
+  width: 38px;
+  height: 38px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  color: #4f46e5;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  font-size: 18px;
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.12);
+  transition: transform var(--duration) var(--ease);
+}
+
+.stat-card:hover .stat-icon {
+  transform: scale(1.08) rotate(-5deg);
+}
+
+[data-theme="dark"] .stat-icon {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(139, 92, 246, 0.12));
+  color: #a78bfa;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+}
+
+.stat-card p {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  margin: 16px 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stat-card h3 {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 0 0 6px;
+  letter-spacing: -0.7px;
+  color: var(--ink);
+}
+
+.stat-card small {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-card small.positive {
+  color: var(--green);
+}
+
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 17px;
+}
+
+.panel {
+  padding: 20px;
+}
+
+.panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.panel-head h3 {
+  margin: 0 0 5px;
+  font-size: 14px;
+}
+
+.panel-head p {
+  margin: 0;
+  color: #9893a5;
+  font-size: 11px;
+}
+
+.panel-head select {
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--muted);
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.link-button {
+  border: 0;
+  background: none;
+  color: #7255d6;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--lav-dark);
+}
+
+
+/* ── Revenue Chart ─────────────────────────── */
+
+.chart {
+  display: flex;
+  height: 205px;
+  margin-top: 18px;
+}
+
+.y-axis {
+  width: 37px;
+  color: #aaa5b3;
+  font-size: 9px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-bottom: 22px;
+}
+
+.chart-area {
+  flex: 1;
+  position: relative;
+}
+
+.grid-lines {
+  position: absolute;
+  inset: 0 0 22px;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 46px,
+    #eeecf4 47px,
+    #eeecf4 48px
+  );
+}
+
+[data-theme="dark"] .grid-lines {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 46px,
+    rgba(255, 255, 255, 0.05) 47px,
+    rgba(255, 255, 255, 0.05) 48px
+  );
+}
+
+svg {
+  position: absolute;
+  inset: 0 0 22px;
+  width: 100%;
+  height: calc(100% - 22px);
+}
+
+.months {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  color: #aaa5b3;
+  font-size: 9px;
+}
+
+
+/* ── Follow-ups ────────────────────────────── */
+
+.followups {
+  padding-bottom: 8px;
+}
+
+.follow-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 15px 0;
+  border-bottom: 1px solid #f0eef4;
+  transition: all var(--duration) var(--ease);
+}
+
+[data-theme="dark"] .follow-row {
+  border-bottom-color: var(--line);
+}
+
+.follow-row:last-child {
+  border: 0;
+}
+
+.follow-row:hover {
+  padding-left: 4px;
+}
+
+.avatar {
+  width: 31px;
+  height: 31px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  color: #6a5461;
+  font-size: 10px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.follow-row div {
+  flex: 1;
+  min-width: 0;
+}
+
+.follow-row b {
+  font-size: 11px;
+  display: block;
+}
+
+.follow-row small {
+  color: #9690a1;
+  font-size: 9px;
+  display: block;
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.follow-row button {
+  border: 0;
+  background: #f1edff;
+  color: #684bd1;
+  font-weight: bold;
+  font-size: 9px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+  white-space: nowrap;
+}
+
+.follow-row button:hover {
+  background: #e4dbff;
+}
+
+
+/* ── Recent Quotations Table ───────────────── */
+
+.recent {
+  margin-top: 17px;
+  padding: 20px 20px 8px;
+}
+
+.quote-table {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1.5fr 1fr 1fr 1fr auto;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding: 14px 12px;
+  font-size: 12.5px;
+  border-radius: var(--radius-sm);
+  transition: all var(--duration) var(--ease);
+}
+
+[data-theme="dark"] .table-row {
+  border-top-color: var(--line);
+}
+
+.table-row:hover:not(.table-head) {
+  background: var(--soft);
+  transform: translateX(3px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.table-head {
+  border: 0;
+  padding: 4px 12px 12px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  border-bottom: 2px solid var(--line);
+  margin-bottom: 4px;
+}
+
+.table-row b {
+  font-size: 12.5px;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.table-row button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.table-row button:hover {
+  color: var(--lav);
+}
+
+.status {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+  border-radius: var(--radius-full);
+  margin-right: 7px;
+  position: relative;
+}
+
+.status.sent     { background: var(--blue); box-shadow: 0 0 8px var(--blue); }
+.status.viewed   { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.status.draft    { background: var(--muted); }
+.status.accepted { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.status.rejected { background: var(--red); box-shadow: 0 0 8px var(--red); }
+.status.expired  { background: #8b8496; }
+
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 23, 58, 0.47);
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  backdrop-filter: blur(5px);
+  animation: fade-in 0.2s var(--ease);
+}
+
+.close {
+  border: 0;
+  background: #f0edf5;
+  border-radius: var(--radius-full);
+  font-size: 22px;
+  width: 32px;
+  height: 32px;
+  color: #625d71;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+[data-theme="dark"] .close {
+  background: var(--line);
+  color: var(--ink);
+}
+
+.close:hover {
+  background: #e4e0ec;
+}
+
+
+/* ── Workspace Modal ───────────────────────── */
+
+.workspace {
+  width: min(980px, 100%);
+  max-height: 92vh;
+  overflow: auto;
+  background: var(--soft);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: var(--shadow-xl);
+  animation: modal-slide-up 0.3s var(--ease);
+}
+
+[data-theme="dark"] .workspace {
+  background: var(--surface);
+}
+
+.workspace-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.workspace-head h2 {
+  margin: 8px 0 5px;
+  font-size: 24px;
+  letter-spacing: -0.7px;
+}
+
+.workspace-head p {
+  color: #807b8d;
+  font-size: 12px;
+  margin: 0;
+}
+
+.tool-launchers {
+  display: flex;
+  gap: 8px;
+  margin: -8px 0 18px;
+}
+
+.tool-launchers button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: #6953c9;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.tool-launchers button:hover {
+  border-color: var(--lav);
+  background: #f4f1ff;
+}
+
+.workspace-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.05fr;
+  gap: 18px;
+}
+
+
+/* ── Request Card ──────────────────────────── */
+
+.request-card,
+.builder-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+}
+
+label {
+  display: block;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #9690a2;
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+textarea {
+  width: 100%;
+  height: 160px;
+  resize: none;
+  border: 1px solid #e4e0ed;
+  border-radius: var(--radius-md);
+  padding: 13px;
+  color: var(--ink-secondary);
+  font: 13px/1.5 var(--font);
+  background: var(--soft);
+  outline-color: #8064dc;
+  transition: border-color var(--duration) var(--ease);
+}
+
+textarea:focus {
+  border-color: var(--lav);
+}
+
+.request-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.attach {
+  border: 0;
+  background: none;
+  color: #746e80;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.analyze {
+  font-size: 11px;
+  padding: 9px 12px;
+}
+
+.match-box {
+  background: #f4f1ff;
+  border-radius: var(--radius-md);
+  padding: 14px;
+  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+[data-theme="dark"] .match-box {
+  background: rgba(114, 85, 223, 0.1);
+}
+
+.match-box > div {
+  position: relative;
+  padding-left: 28px;
+}
+
+.match-icon {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  background: #7659df;
+  color: white;
+  font-size: 11px;
+}
+
+.match-box b,
+.match-box small {
+  display: block;
+  font-size: 11px;
+}
+
+.match-box small {
+  color: #817b92;
+  margin-top: 4px;
+  font-size: 9px;
+}
+
+.match-box button,
+.builder-top button {
+  border: 0;
+  background: none;
+  color: #6e51d7;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+
+/* ── Builder Card ──────────────────────────── */
+
+.builder-top {
+  display: flex;
+  justify-content: space-between;
+}
+
+.builder-top label {
+  margin-bottom: 5px;
+}
+
+.builder-top b {
+  font-size: 13px;
+}
+
+.builder-top b span {
+  margin-left: 5px;
+  background: #fff0d8;
+  color: #b16f11;
+  border-radius: var(--radius-sm);
+  padding: 3px 6px;
+  font-size: 8px;
+}
+
+.line-items {
+  margin-top: 16px;
+}
+
+.line-item {
+  display: grid;
+  grid-template-columns: 1fr 90px 85px;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid #f0eef4;
+  transition: background var(--duration) var(--ease);
+}
+
+[data-theme="dark"] .line-item {
+  border-top-color: var(--line);
+}
+
+.line-item:hover {
+  background: var(--soft);
+  border-radius: var(--radius-sm);
+}
+
+.line-item b {
+  font-size: 10px;
+}
+
+.line-item small {
+  display: block;
+  color: #9c96a5;
+  font-size: 8px;
+  margin-top: 4px;
+}
+
+.qty {
+  display: flex;
+  border: 1px solid #e9e5ef;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  height: 25px;
+}
+
+.qty button {
+  border: 0;
+  background: var(--soft);
+  width: 25px;
+  color: #7256d6;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background var(--duration) var(--ease);
+}
+
+.qty button:hover {
+  background: #ece7ff;
+}
+
+.qty input {
+  width: 35px;
+  border: 0;
+  text-align: center;
+  font-size: 10px;
+  outline: 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.discount-row,
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  color: #777184;
+  font-size: 11px;
+  border-top: 1px solid #f0eef4;
+}
+
+[data-theme="dark"] .discount-row,
+[data-theme="dark"] .total-row {
+  border-top-color: var(--line);
+}
+
+.discount-row div {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.discount-row button {
+  width: 21px;
+  height: 21px;
+  border: 1px solid #e6e2ed;
+  border-radius: 5px;
+  background: var(--surface);
+  color: #7054d7;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.discount-row button:hover {
+  border-color: var(--lav);
+  background: #f4f1ff;
+}
+
+.discount-row b {
+  color: var(--ink-secondary);
+}
+
+.total-row {
+  font-size: 12px;
+}
+
+.total-row b {
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.create-quote {
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px;
+}
+
+.create-quote span {
+  float: right;
+}
+
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+.tool-modal {
+  width: min(580px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: var(--soft);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  position: relative;
+  box-shadow: var(--shadow-xl);
+  animation: modal-slide-up 0.3s var(--ease);
+}
+
+[data-theme="dark"] .tool-modal {
+  background: var(--surface);
+}
+
+.tool-modal > .close {
+  position: absolute;
+  right: 22px;
+  top: 22px;
+}
+
+.tool-modal h2 {
+  font-size: 22px;
+  margin: 0 0 6px;
+  letter-spacing: -0.6px;
+}
+
+.tool-modal > p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 22px;
+}
+
+
+/* ── Upload Zone ───────────────────────────── */
+
+.upload-zone {
+  height: 176px;
+  border: 1.5px dashed #c9bde8;
+  border-radius: 12px;
+  background: var(--soft);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  position: relative;
+  transition: all var(--duration) var(--ease);
+}
+
+.upload-zone:hover {
+  border-color: var(--lav);
+  background: #f4f1ff;
+}
+
+.upload-zone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.upload-zone span {
+  font-size: 28px;
+  color: #7558da;
+}
+
+.upload-zone b {
+  font-size: 12px;
+}
+
+.upload-zone small {
+  font-size: 10px;
+  color: #928b9e;
+}
+
+.file-chip {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f1edff;
+  font-size: 11px;
+  color: #584a7c;
+}
+
+.file-chip button {
+  float: right;
+  border: 0;
+  background: none;
+  font-size: 16px;
+  color: #827894;
+  cursor: pointer;
+}
+
+.primary-wide {
+  width: 100%;
+  border: 0;
+  background: #7052d7;
+  color: white;
+  padding: 12px;
+  border-radius: 9px;
+  margin-top: 13px;
+  font-weight: bold;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.primary-wide:hover {
+  background: #5f44c7;
+}
+
+.scan-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 13px;
+  background: var(--green-bg);
+  border: 1px solid var(--green-border);
+  border-radius: var(--radius-md);
+  animation: slide-in-up 0.3s var(--ease);
+}
+
+.scan-result > span {
+  width: 23px;
+  height: 23px;
+  display: grid;
+  place-items: center;
+  background: var(--green);
+  color: #fff;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.scan-result div {
+  flex: 1;
+}
+
+.scan-result b,
+.scan-result small {
+  display: block;
+  font-size: 11px;
+}
+
+.scan-result small {
+  font-size: 9px;
+  color: #6c8d7c;
+  margin-top: 3px;
+}
+
+.scan-result button {
+  border: 0;
+  background: transparent;
+  color: #4e8d6c;
+  font-size: 10px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+
+/* ── Design Modal ──────────────────────────── */
+
+.design-grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 26px;
+}
+
+.field,
+.setting input {
+  width: 100%;
+  border: 1px solid #e5e1eb;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+  margin-bottom: 15px;
+  transition: border-color var(--duration) var(--ease);
+}
+
+.field:focus,
+.setting input:focus {
+  border-color: var(--lav);
+  outline: none;
+}
+
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 15px;
+}
+
+.color-row input {
+  width: 36px;
+  height: 32px;
+  border: 0;
+  padding: 0;
+  background: none;
+}
+
+.color-row code {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.terms {
+  height: 86px;
+}
+
+.design-preview {
+  height: 205px;
+  border: 1px solid #e9e5ef;
+  border-top: 8px solid;
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  box-shadow: 0 12px 22px rgba(40, 32, 65, 0.05);
+}
+
+.design-preview b {
+  font-size: 13px;
+}
+
+.design-preview span {
+  font-size: 9px;
+  color: #aaa3b4;
+}
+
+.design-preview i {
+  height: 6px;
+  background: #ece9f1;
+  border-radius: 4px;
+  width: 90%;
+}
+
+.design-preview i:nth-of-type(2) {
+  width: 66%;
+}
+
+.design-preview strong {
+  margin-top: auto;
+  text-align: right;
+  font-size: 17px;
+}
+
+
+/* ── Settings Modal ────────────────────────── */
+
+.settings-list {
+  border: 1px solid #ebe7f0;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .settings-list {
+  border-color: var(--line);
+}
+
+.setting {
+  padding: 11px 13px;
+  border-bottom: 1px solid #eeeaf3;
+  display: grid;
+  grid-template-columns: 145px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-theme="dark"] .setting {
+  border-bottom-color: var(--line);
+}
+
+.setting:last-child {
+  border: 0;
+}
+
+.setting span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.setting input {
+  margin: 0;
+  padding: 7px;
+  border: 0;
+  background: var(--soft);
+}
+
+.setting input:focus {
+  outline: 1px solid #b5a6ee;
+}
+
+
+/* ── Toast ─────────────────────────────────── */
+
+.toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  background: #30294d;
+  color: #fff;
+  padding: 13px 16px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 20;
+  font-size: 12px;
+  animation: slide-in-up 0.3s var(--ease);
+}
+
+.toast span {
+  color: #94e7b6;
+  margin-right: 8px;
+  font-weight: bold;
+}
+
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+/* ── AI Timeline ───────────────────────────── */
+
+.ai-timeline {
+  padding: 16px 0;
+}
+
+.ai-timeline-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  position: relative;
+  opacity: 0.4;
+  transition: all 0.4s var(--ease);
+}
+
+.ai-timeline-step.ai-step-running,
+.ai-timeline-step.ai-step-complete {
+  opacity: 1;
+}
+
+.ai-timeline-step::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 32px;
+  bottom: -8px;
+  width: 2px;
+  background: var(--line);
+}
+
+.ai-timeline-step:last-child::before {
+  display: none;
+}
+
+.ai-timeline-step.ai-step-complete::before {
+  background: var(--green);
+}
+
+.ai-timeline-step.ai-step-running::before {
+  background: var(--lav);
+}
+
+.ai-step-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  transition: all 0.3s var(--ease);
+  z-index: 1;
+}
+
+.ai-step-running .ai-step-icon {
+  border-color: var(--lav);
+  background: var(--lav);
+  color: white;
+  animation: ai-pulse 1.5s ease-in-out infinite;
+}
+
+.ai-step-complete .ai-step-icon {
+  border-color: var(--green);
+  background: var(--green);
+  color: white;
+}
+
+.ai-step-error .ai-step-icon {
+  border-color: var(--red);
+  background: var(--red);
+  color: white;
+}
+
+.ai-step-content h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ai-step-content p {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.ai-step-content .ai-step-duration {
+  font-size: 9px;
+  color: var(--green);
+  margin-top: 2px;
+}
+
+
+/* ── AI Reasoning Panel ────────────────────── */
+
+.reasoning-panel {
+  margin-top: 16px;
+}
+
+.reasoning-item {
+  padding: 14px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  animation: slide-in-up 0.3s var(--ease);
+}
+
+.reasoning-match {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.reasoning-match .reasoning-from {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.reasoning-match .reasoning-arrow {
+  color: var(--lav);
+  font-weight: bold;
+}
+
+.reasoning-match .reasoning-to {
+  font-weight: 600;
+}
+
+.reasoning-confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.reasoning-reason {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.reasoning-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.reasoning-actions button {
+  font-size: 10px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all var(--duration) var(--ease);
+}
+
+.reasoning-actions .btn-approve {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.reasoning-actions .btn-approve:hover {
+  background: var(--green-bg);
+}
+
+.reasoning-actions .btn-correct {
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.reasoning-actions .btn-correct:hover {
+  background: var(--amber-bg);
+}
+
+
+/* ── AI Review Checklist ───────────────────── */
+
+.ai-review-checklist {
+  padding: 16px 0;
+}
+
+.ai-review-checklist h3 {
+  font-size: 14px;
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  transition: all var(--duration) var(--ease);
+}
+
+.review-check-item:hover {
+  background: var(--soft);
+}
+
+.review-check-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.review-success .review-check-icon {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.review-warning .review-check-icon {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.review-error .review-check-icon {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.review-check-content h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.review-check-content p {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.review-summary {
+  display: flex;
+  gap: 16px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+}
+
+.review-summary span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+
+/* ── AI Copilot ────────────────────────────── */
+
+.ai-copilot {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--copilot-width);
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  animation: slide-in-right 0.3s var(--ease);
+  box-shadow: -10px 0 30px rgba(23, 17, 42, 0.08);
+}
+
+.copilot-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.copilot-header h3 {
+  margin: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copilot-header h3 span {
+  font-size: 16px;
+}
+
+.copilot-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.copilot-message {
+  max-width: 90%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  animation: slide-in-up 0.2s var(--ease);
+}
+
+.copilot-user {
+  align-self: flex-end;
+  background: var(--lav);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.copilot-assistant {
+  align-self: flex-start;
+  background: var(--soft);
+  color: var(--ink);
+  border-bottom-left-radius: 4px;
+}
+
+.copilot-typing {
+  align-self: flex-start;
+  padding: 12px 16px;
+}
+
+.copilot-typing-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.copilot-typing-dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--muted);
+  border-radius: var(--radius-full);
+  animation: typing-bounce 1.4s ease-in-out infinite;
+}
+
+.copilot-typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.copilot-typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+.copilot-commands {
+  display: flex;
+  gap: 6px;
+  padding: 10px 16px;
+  overflow-x: auto;
+  border-top: 1px solid var(--line);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.copilot-commands::-webkit-scrollbar { display: none; }
+
+.copilot-command-chip {
+  flex-shrink: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+  white-space: nowrap;
+}
+
+.copilot-command-chip:hover {
+  border-color: var(--lav);
+  color: var(--lav);
+  background: #f4f1ff;
+}
+
+.copilot-input {
+  display: flex;
+  gap: 8px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+}
+
+.copilot-input input {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12px;
+  background: var(--soft);
+  color: var(--ink);
+  outline: none;
+  transition: border-color var(--duration) var(--ease);
+}
+
+.copilot-input input:focus {
+  border-color: var(--lav);
+}
+
+.copilot-input button {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--lav);
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all var(--duration) var(--ease);
+}
+
+.copilot-input button:hover {
+  background: var(--lav-dark);
+}
+
+
+/* ── AI Suggestions ────────────────────────── */
+
+.ai-suggestions {
+  margin-top: 16px;
+}
+
+.ai-suggestions-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.ai-suggestions-header span {
+  color: var(--lav);
+}
+
+.suggestion-card {
+  padding: 14px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  transition: all var(--duration) var(--ease);
+}
+
+.suggestion-card:hover {
+  border-color: var(--lav-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.suggestion-card h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+
+.suggestion-card p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.suggestion-card button {
+  margin-top: 8px;
+  border: 0;
+  background: none;
+  color: var(--lav);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+
+/* ── Confidence Badge ──────────────────────── */
+
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.confidence-high {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.confidence-medium {
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.confidence-low {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+/* ── Tasks Widget ──────────────────────────── */
+
+.tasks-widget {
+  margin-top: 17px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+  transition: all 0.25s cubic-bezier(0.25, 1, 0.5, 1);
+  border-radius: var(--radius-sm);
+}
+
+.task-item:last-child {
+  border-bottom: 0;
+}
+
+.task-item:hover {
+  background: var(--soft);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+
+.task-priority {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.task-priority.high   { background: var(--red); box-shadow: 0 0 8px var(--red); }
+.task-priority.medium { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+.task-priority.low    { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+.task-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-info h4 {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.task-info p {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-type-badge {
+  font-size: 10px;
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-weight: 700;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+
+.task-type-badge.ai-suggestion {
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+  color: #4f46e5;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+[data-theme="dark"] .task-type-badge.ai-suggestion {
+  background: rgba(99, 102, 241, 0.15);
+  color: #c4b5fd;
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.task-type-badge.follow-up {
+  background: var(--amber-bg);
+  color: var(--amber);
+  border: 1px solid var(--amber-border);
+}
+
+.task-type-badge.review,
+.task-type-badge.quotation {
+  background: var(--blue-bg);
+  color: var(--blue);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.task-type-badge.admin {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}
+
+.task-type-badge.review {
+  background: var(--blue-bg);
+  color: var(--blue);
+}
+
+
+/* ── Notification Center ───────────────────── */
+
+.notification-center {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  width: 360px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 15;
+  animation: slide-in-down 0.2s var(--ease);
+  overflow: hidden;
+}
+
+.notification-center-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notification-center-header h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.notification-center-header button {
+  border: 0;
+  background: none;
+  color: var(--lav);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.notification-item {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  transition: background var(--duration) var(--ease);
+  cursor: pointer;
+}
+
+.notification-item:hover {
+  background: var(--soft);
+}
+
+.notification-item:last-child {
+  border-bottom: 0;
+}
+
+.notification-unread {
+  background: rgba(114, 85, 223, 0.03);
+}
+
+.notification-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.notification-icon.quotation-ready { background: var(--green-bg); color: var(--green); }
+.notification-icon.review-required { background: var(--amber-bg); color: var(--amber); }
+.notification-icon.low-stock       { background: var(--red-bg); color: var(--red); }
+.notification-icon.customer-reply  { background: var(--blue-bg); color: var(--blue); }
+.notification-icon.pending-followup { background: #f1edff; color: var(--lav); }
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-content h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.notification-content p {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notification-time {
+  font-size: 9px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+/* ── Customers View ────────────────────────── */
+
+.customers-view {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 20px;
+  min-height: 500px;
+}
+
+.customer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.customer-card {
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.customer-card:hover {
+  border-color: var(--lav-light);
+  box-shadow: var(--shadow-sm);
+}
+
+.customer-card-active {
+  border-color: var(--lav);
+  background: #f4f1ff;
+}
+
+[data-theme="dark"] .customer-card-active {
+  background: rgba(114, 85, 223, 0.1);
+}
+
+.customer-card .avatar {
+  width: 36px;
+  height: 36px;
+  font-size: 12px;
+}
+
+.customer-card-info h4 {
+  margin: 0;
+  font-size: 12px;
+}
+
+.customer-card-info p {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.customer-detail {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+}
+
+.customer-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.customer-detail-header .avatar {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+}
+
+.customer-detail-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.customer-detail-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.customer-stats {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.customer-stat {
+  text-align: center;
+}
+
+.customer-stat .stat-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.customer-stat .stat-label {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.customer-timeline {
+  position: relative;
+}
+
+.timeline-event {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  position: relative;
+}
+
+.timeline-event::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 36px;
+  bottom: -12px;
+  width: 2px;
+  background: var(--line);
+}
+
+.timeline-event:last-child::before {
+  display: none;
+}
+
+.timeline-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  flex-shrink: 0;
+  z-index: 1;
+  background: var(--surface);
+  border: 2px solid var(--line);
+}
+
+.timeline-event-content h4 {
+  margin: 0;
+  font-size: 12px;
+}
+
+.timeline-event-content p {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.timeline-event-content time {
+  font-size: 9px;
+  color: var(--muted);
+}
+
+
+/* ── Products View ─────────────────────────── */
+
+.products-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.search-input {
+  padding: 9px 14px 9px 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  width: 240px;
+  outline: none;
+  transition: border-color var(--duration) var(--ease);
+}
+
+.search-input:focus {
+  border-color: var(--lav);
+}
+
+.category-filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  font-size: 11px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+}
+
+.filter-chip:hover {
+  border-color: var(--lav-light);
+}
+
+.filter-chip.active {
+  background: var(--lav);
+  color: white;
+  border-color: var(--lav);
+}
+
+.products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.product-card {
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  transition: all var(--duration) var(--ease);
+}
+
+.product-card:hover {
+  border-color: var(--lav-light);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+}
+
+.product-card h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.product-card .product-sku {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.product-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.product-meta span {
+  font-size: 9px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: var(--soft);
+  color: var(--muted);
+}
+
+.product-card .product-price {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 8px 0 4px;
+}
+
+.product-stock {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+}
+
+.stock-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+}
+
+.stock-good .stock-dot  { background: var(--green); }
+.stock-low .stock-dot   { background: var(--amber); }
+.stock-out .stock-dot   { background: var(--red); }
+.stock-good { color: var(--green); }
+.stock-low  { color: var(--amber); }
+.stock-out  { color: var(--red); }
+
+
+/* ── Quotations View ───────────────────────── */
+
+.quotations-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.quotation-filters {
+  display: flex;
+  gap: 4px;
+  background: var(--soft);
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.filter-tab {
+  padding: 7px 14px;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+  font-weight: 500;
+}
+
+.filter-tab:hover {
+  color: var(--ink);
+}
+
+.filter-tab-active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+}
+
+
+/* ── Version History ───────────────────────── */
+
+.version-history {
+  padding: 16px 0;
+}
+
+.version-node {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  position: relative;
+}
+
+.version-node::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 38px;
+  bottom: -14px;
+  width: 2px;
+  background: var(--line);
+}
+
+.version-node:last-child::before {
+  display: none;
+}
+
+.version-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  z-index: 1;
+  background: var(--lav);
+  color: white;
+}
+
+.version-active .version-badge {
+  box-shadow: 0 0 0 3px rgba(114, 85, 223, 0.2);
+}
+
+.version-content h4 {
+  margin: 0;
+  font-size: 12px;
+}
+
+.version-content time {
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.version-changes {
+  margin-top: 8px;
+}
+
+.version-change {
+  font-size: 11px;
+  padding: 4px 0;
+}
+
+.change-old {
+  text-decoration: line-through;
+  color: var(--red);
+  margin-right: 8px;
+}
+
+.change-new {
+  color: var(--green);
+}
+
+
+/* ── Approval Workflow ─────────────────────── */
+
+.approval-workflow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 20px 0;
+}
+
+.approval-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  flex: 1;
+}
+
+.approval-step::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  right: -50%;
+  height: 2px;
+  background: var(--line);
+}
+
+.approval-step:last-child::after {
+  display: none;
+}
+
+.approval-step-done::after {
+  background: var(--green);
+}
+
+.approval-step-current::after {
+  background: linear-gradient(90deg, var(--lav) 50%, var(--line) 50%);
+}
+
+.approval-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  z-index: 1;
+  border: 2px solid var(--line);
+  background: var(--surface);
+  transition: all 0.3s var(--ease);
+}
+
+.approval-step-done .approval-circle {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+
+.approval-step-current .approval-circle {
+  background: var(--lav);
+  border-color: var(--lav);
+  color: white;
+  animation: ai-pulse 2s ease-in-out infinite;
+}
+
+.approval-step-pending .approval-circle {
+  color: var(--muted);
+}
+
+.approval-label {
+  font-size: 9px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.approval-step-done .approval-label,
+.approval-step-current .approval-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+
+/* ── Analytics View ────────────────────────── */
+
+.analytics-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.analytics-funnel {
+  margin-top: 20px;
+}
+
+.funnel-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.funnel-bar-label {
+  width: 80px;
+  font-size: 11px;
+  text-align: right;
+  color: var(--muted);
+}
+
+.funnel-bar-track {
+  flex: 1;
+  height: 28px;
+  background: var(--soft);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.funnel-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--lav), var(--lav-light));
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+  font-size: 11px;
+  color: white;
+  font-weight: 600;
+  transition: width 0.8s var(--ease);
+}
+
+
+/* ── Command Palette ───────────────────────── */
+
+.command-palette {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 23, 58, 0.5);
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  padding-top: 15vh;
+  backdrop-filter: blur(8px);
+  animation: fade-in 0.15s var(--ease);
+}
+
+.command-palette-inner {
+  width: min(580px, 90%);
+  max-height: 420px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: modal-slide-up 0.2s var(--ease);
+}
+
+.command-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.command-input span {
+  color: var(--muted);
+  font-size: 18px;
+}
+
+.command-input input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  font-size: 15px;
+  background: transparent;
+  color: var(--ink);
+}
+
+.command-input kbd {
+  font-size: 10px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--muted);
+  background: var(--soft);
+}
+
+.command-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.command-group {
+  padding: 4px 0;
+}
+
+.command-group-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  padding: 6px 10px;
+  font-weight: 600;
+}
+
+.command-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background var(--duration) var(--ease);
+}
+
+.command-item:hover,
+.command-item-active {
+  background: var(--soft);
+}
+
+.command-item-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  background: var(--soft);
+  color: var(--muted);
+}
+
+.command-item span {
+  flex: 1;
+}
+
+.command-shortcut {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+
+/* ── Skeleton Loading ──────────────────────── */
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--soft) 25%,
+    var(--line) 50%,
+    var(--soft) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-text {
+  height: 12px;
+  margin-bottom: 8px;
+}
+
+.skeleton-text:last-child {
+  width: 70%;
+}
+
+.skeleton-card {
+  height: 120px;
+  border-radius: var(--radius-lg);
+}
+
+.skeleton-chart {
+  height: 200px;
+  border-radius: var(--radius-lg);
+}
+
+.skeleton-table-row {
+  height: 42px;
+  margin-bottom: 4px;
+}
+
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: slide-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes slide-in-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes modal-slide-up {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes ai-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(114, 85, 223, 0.4); }
+  50%      { box-shadow: 0 0 0 8px rgba(114, 85, 223, 0); }
+}
+
+@keyframes spark-pulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes orb-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-12px); }
+}
+
+@keyframes float-card {
+  0%, 100% { transform: rotate(5deg) translateY(0); }
+  50%      { transform: rotate(5deg) translateY(-8px); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+  40%           { transform: scale(1); opacity: 1; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: var(--radius-full);
+  animation: spin 0.6s linear infinite;
+}
+
+
+/* ──────────────────────────────────────────────
+   QuoteAI — Global Styles & Design System
+   ────────────────────────────────────────────── */
+
+@media (max-width: 1000px) {
+  .sidebar {
+    width: 70px;
+    padding: 20px 10px;
+  }
+
+  .brand > span:not(.brand-mark),
+  .company-switch > span:not(.company-icon),
+  .company-switch .chevron,
+  .nav-item:not(.active) {
+    font-size: 0;
+  }
+
+  .company-switch {
+    margin: 30px 0 18px;
+    padding: 8px;
+  }
+
+  .nav-item {
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .nav-item i {
+    font-size: 19px;
+  }
+
+  .nav-item.active {
+    font-size: 0;
+  }
+
+  .sidebar-bottom .profile b,
+  .profile i {
+    display: none;
+  }
+
+  .content {
+    margin-left: 70px;
+    width: calc(100% - 70px);
+    padding: 25px;
+  }
+
+  .content.with-copilot {
+    width: calc(100% - 70px - var(--copilot-width));
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .customers-view {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .content {
+    padding: 18px 13px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .top-actions .icon-button {
+    display: none;
+  }
+
+  .new-quote {
+    font-size: 0;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+  }
+
+  .new-quote:first-letter {
+    font-size: 20px;
+  }
+
+  .hero-card {
+    padding: 28px;
+    height: 260px;
+  }
+
+  .hero-visual {
+    opacity: 0.35;
+    right: -70px;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .stat-card {
+    padding: 13px;
+  }
+
+  .recent {
+    overflow: auto;
+  }
+
+  .quote-table {
+    min-width: 620px;
+  }
+
+  .workspace {
+    padding: 18px;
+  }
+
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-head h2 {
+    font-size: 20px;
+  }
+
+  .design-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-modal {
+    padding: 22px;
+  }
+
+  .setting {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .tool-launchers {
+    flex-wrap: wrap;
+  }
+
+  .ai-copilot {
+    width: 100%;
+  }
+
+  .content.with-copilot {
+    display: none;
+  }
+
+  .command-palette-inner {
+    margin-top: -10vh;
+  }
+
+  .products-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-kpis {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .approval-workflow {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .approval-step::after {
+    display: none;
+  }
+}
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\app\layout.tsx
 
-`	ypescript
+```tsx
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
@@ -118,7 +3723,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Operon AI â€” Autonomous Business Operations Employee",
+  title: "Operon AI — Autonomous Business Operations Employee",
   description:
     "AI Business Operations Agent and autonomous employee. Automate OCR, CRM, inventory, tenders, PDF quotations, and follow-ups.",
   keywords: [
@@ -149,17 +3754,16 @@ export default function RootLayout({
     </html>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\app\page.tsx
 
-`	ypescript
+```tsx
 "use client";
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-   QuoteAI â€” Main Page Orchestrator
-   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ══════════════════════════════════════════════
+   QuoteAI — Main Page Orchestrator
+   ══════════════════════════════════════════════ */
 
 import { useState, useCallback, useMemo, useEffect } from "react";
 
@@ -183,17 +3787,16 @@ import { DesignModal } from "@/components/tools/DesignModal";
 import { SettingsModal } from "@/components/tools/SettingsModal";
 
 // AI & OCR
-import { AICopilot } from "@/components/ai/AICopilot";
 import { OCRHub } from "@/components/ocr/OCRHub";
 import { autoLearnProductsFromQuoteItems } from "@/services/inventory";
 import { getBrandSettings, saveBrandSettings } from "@/services/brand";
 import { addQuotation } from "@/services/quotations";
 
 // Enterprise Views
-import { CustomerTimeline } from "@/components/customers/CustomerTimeline";
 import { ProductsView } from "@/components/products/ProductsView";
 import { QuotationsView } from "@/components/quotation/QuotationsView";
 import { AnalyticsView } from "@/components/analytics/AnalyticsView";
+import { AIMarketingView } from "@/components/marketing/AIMarketingView";
 
 // Search
 import { CommandPalette } from "@/components/search/CommandPalette";
@@ -211,18 +3814,18 @@ import type { ActiveView, ToolType, BrandSettings, CompanySettings, QuoteItem, Q
 import { DEFAULT_COMPANY, DEFAULT_BRAND } from "@/lib/constants";
 
 export default function Home() {
-  // â”€â”€ Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Navigation ──────────────────────────────
   const [active, setActive] = useState<ActiveView>("Overview");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // â”€â”€ Modals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Modals ──────────────────────────────────
   const [showWorkspace, setShowWorkspace] = useState(false);
   const [tool, setTool] = useState<ToolType>(null);
-  const [showCopilot, setShowCopilot] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [pendingScanItems, setPendingScanItems] = useState<QuoteItem[] | null>(null);
 
-  // â”€â”€ Brand & Company Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Brand & Company Settings ────────────────
   const [brand, setBrandState] = useState<BrandSettings>(DEFAULT_BRAND);
   const [company, setCompany] = useState<CompanySettings>(DEFAULT_COMPANY);
 
@@ -240,30 +3843,28 @@ export default function Home() {
     return () => window.removeEventListener("operon_ai_brand_updated", handleBrandUpdate);
   }, []);
 
-  // â”€â”€ Hooks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Hooks ───────────────────────────────────
   const { toast, notify, clearToast } = useToast();
   const { theme, toggleTheme } = useTheme();
 
-  // â”€â”€ Keyboard Shortcuts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Keyboard Shortcuts ──────────────────────
   const shortcuts = useMemo(
     () => ({
       "mod+k": () => setShowCommandPalette((p) => !p),
-      "mod+j": () => setShowCopilot((p) => !p),
       "mod+n": () => setShowWorkspace(true),
+      "mod+b": () => setSidebarCollapsed((p) => !p),
     }),
     []
   );
   useKeyboardShortcuts(shortcuts);
 
-  // â”€â”€ Callbacks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Callbacks ───────────────────────────────
   const openWorkspace = useCallback(() => {
     setShowWorkspace(true);
-    setActive("AI Workspace");
   }, []);
 
   const handleNavigate = useCallback((view: ActiveView) => {
     setActive(view);
-    if (view === "AI Workspace") setShowWorkspace(true);
   }, []);
 
   const handleScanFromWorkspace = useCallback(() => {
@@ -303,9 +3904,9 @@ export default function Home() {
     setTool(null);
     setShowWorkspace(true);
     if (learnedProducts.length > 0) {
-      notify(`ðŸŽ‰ Saved Quote ${newId} to Quotations tab & auto-learned ${learnedProducts.length} new product(s)!`);
+      notify(`🎉 Saved Quote ${newId} to Quotations tab & auto-learned ${learnedProducts.length} new product(s)!`);
     } else {
-      notify(`ðŸŽ‰ Saved Quote ${newId} to Quotations tab!`);
+      notify(`🎉 Saved Quote ${newId} to Quotations tab!`);
     }
   }, [notify]);
 
@@ -319,19 +3920,19 @@ export default function Home() {
     notify("Company settings saved.");
   }, [notify]);
 
-  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Render ──────────────────────────────────
   return (
-    <main className={`app-shell`} data-theme={theme}>
-      {/* â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+    <main className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`} data-theme={theme}>
+      {/* ── Sidebar ─────────────────────────── */}
       <Sidebar
         active={active}
         onNavigate={handleNavigate}
         onSettings={() => setTool("settings")}
-        onToggleCopilot={() => setShowCopilot((p) => !p)}
+        collapsed={sidebarCollapsed}
       />
 
-      {/* â”€â”€ Main Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <section className={`content ${showCopilot ? "with-copilot" : ""}`}>
+      {/* ── Main Content ────────────────────── */}
+      <section className="content">
         <Topbar
           active={active}
           onNewQuote={openWorkspace}
@@ -340,6 +3941,8 @@ export default function Home() {
           theme={theme}
           notificationCount={3}
           onNotifications={() => setShowNotifications((p) => !p)}
+          isSidebarCollapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed((p) => !p)}
         />
 
         {/* Notification dropdown */}
@@ -350,7 +3953,7 @@ export default function Home() {
           />
         )}
 
-        {/* â”€â”€ Overview Dashboard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Overview Dashboard ────────────── */}
         {active === "Overview" && (
           <>
             <HeroCard onStart={openWorkspace} />
@@ -364,7 +3967,7 @@ export default function Home() {
           </>
         )}
 
-        {/* â”€â”€ Section Views â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Section Views ─────────────────── */}
         {active === "OCR Hub" && (
           <OCRHub
             onConvertToQuote={(items, customerName, docTitle) => {
@@ -393,9 +3996,9 @@ export default function Home() {
               setPendingScanItems(items);
               setShowWorkspace(true);
               if (learnedProducts.length > 0) {
-                notify(`ðŸŽ‰ Saved Quote ${newId} to Quotations tab & auto-learned ${learnedProducts.length} new product(s)!`);
+                notify(`🎉 Saved Quote ${newId} to Quotations tab & auto-learned ${learnedProducts.length} new product(s)!`);
               } else {
-                notify(`ðŸŽ‰ Saved Quote ${newId} to Quotations tab with ${items.length} OCR items!`);
+                notify(`🎉 Saved Quote ${newId} to Quotations tab with ${items.length} OCR items!`);
               }
             }}
             notify={notify}
@@ -407,18 +4010,19 @@ export default function Home() {
             onNewQuote={() => setShowWorkspace(true)}
           />
         )}
-        {active === "Customers" && <CustomerTimeline />}
         {active === "Products" && <ProductsView />}
         {active === "Follow-ups" && <FollowUpsPanel expanded />}
         {active === "Analytics" && <AnalyticsView />}
+        {active === "AI Marketing" && (
+          <AIMarketingView
+            company={company}
+            onCompanyChange={setCompany}
+            notify={notify}
+          />
+        )}
       </section>
 
-      {/* â”€â”€ AI Copilot (Right Panel) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      {showCopilot && (
-        <AICopilot onClose={() => setShowCopilot(false)} />
-      )}
-
-      {/* â”€â”€ Workspace Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Workspace Modal ─────────────────── */}
       {showWorkspace && (
         <WorkspaceModal
           brand={brand}
@@ -432,7 +4036,7 @@ export default function Home() {
         />
       )}
 
-      {/* â”€â”€ Tool Modals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Tool Modals ─────────────────────── */}
       {tool === "scan" && (
         <ScanModal
           onClose={() => setTool(null)}
@@ -459,7 +4063,7 @@ export default function Home() {
         />
       )}
 
-      {/* â”€â”€ Command Palette (Cmd+K) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Command Palette (Cmd+K) ─────────── */}
       {showCommandPalette && (
         <CommandPalette
           onClose={() => setShowCommandPalette(false)}
@@ -467,17 +4071,16 @@ export default function Home() {
         />
       )}
 
-      {/* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Toast ───────────────────────────── */}
       {toast && <Toast message={toast} onDismiss={clearToast} />}
     </main>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ai\AICopilot.tsx
 
-`	ypescript
+```tsx
 'use client';
 import React, { useState } from 'react';
 import { useAICopilot } from '@/hooks/useAICopilot';
@@ -502,9 +4105,9 @@ export function AICopilot({ onClose }: AICopilotProps) {
     <div className="ai-copilot fixed right-0 top-0 bottom-0 w-[380px] bg-white border-l shadow-2xl flex flex-col z-50">
       <div className="copilot-header flex justify-between items-center p-4 border-b bg-gray-50">
         <h3 className="font-semibold flex items-center gap-2">
-          <span className="text-purple-600">âš¡</span> AI Copilot
+          <span className="text-purple-600">⚡</span> AI Copilot
         </h3>
-        <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded">âœ•</button>
+        <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded">✕</button>
       </div>
 
       <div className="copilot-messages flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/50">
@@ -557,19 +4160,18 @@ export function AICopilot({ onClose }: AICopilotProps) {
             disabled={!input.trim() || isTyping}
             className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50"
           >
-            â†‘
+            ↑
           </button>
         </form>
       </div>
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ai\AIReasoningPanel.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React from "react";
@@ -589,7 +4191,7 @@ export function AIReasoningPanel({ items }: AIReasoningPanelProps) {
   return (
     <div className="reasoning-panel">
       <h3 style={{ fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-        <span style={{ color: "var(--lav)" }}>âœ¦</span> AI Matching Logic
+        <span style={{ color: "var(--lav)" }}>✦</span> AI Matching Logic
       </h3>
 
       {reasoningItems.map((item) => (
@@ -599,7 +4201,7 @@ export function AIReasoningPanel({ items }: AIReasoningPanelProps) {
             <span className="reasoning-from">
               &ldquo;{item.matchedFrom || "Query"}&rdquo;
             </span>
-            <span className="reasoning-arrow">â†’</span>
+            <span className="reasoning-arrow">→</span>
             <span className="reasoning-to">{item.product}</span>
           </div>
 
@@ -636,12 +4238,11 @@ export function AIReasoningPanel({ items }: AIReasoningPanelProps) {
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ai\AIReviewChecklist.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React from "react";
@@ -662,7 +4263,7 @@ export function AIReviewChecklist({
   return (
     <div className="ai-review-checklist">
       <h3>
-        <span style={{ color: "var(--lav)", fontSize: 16 }}>âœ¦</span> AI Quality
+        <span style={{ color: "var(--lav)", fontSize: 16 }}>✦</span> AI Quality
         Review
       </h3>
 
@@ -679,9 +4280,9 @@ export function AIReviewChecklist({
             }`}
           >
             <div className="review-check-icon">
-              {check.severity === "success" && "âœ“"}
-              {check.severity === "warning" && "âš "}
-              {check.severity === "error" && "âœ—"}
+              {check.severity === "success" && "✓"}
+              {check.severity === "warning" && "⚠"}
+              {check.severity === "error" && "✗"}
             </div>
             <div className="review-check-content">
               <h4>{check.label}</h4>
@@ -711,12 +4312,11 @@ export function AIReviewChecklist({
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ai\AISuggestions.tsx
 
-`	ypescript
+```tsx
 'use client';
 import React from 'react';
 
@@ -725,23 +4325,23 @@ export function AISuggestions() {
     {
       id: 1,
       title: 'Discount Recommendation',
-      description: 'Customer purchased â‚¹8L last year. Suggested discount: 6%. Expected margin: 19%',
+      description: 'Customer purchased ₹8L last year. Suggested discount: 6%. Expected margin: 19%',
       action: 'Apply 6% Discount',
-      icon: 'ðŸ’¡'
+      icon: '💡'
     },
     {
       id: 2,
       title: 'Upsell Opportunity',
       description: 'Usually bought together: Maintenance Plan (Premium). Add to quote?',
       action: 'Add Item',
-      icon: 'ðŸ“ˆ'
+      icon: '📈'
     }
   ];
 
   return (
     <div className="ai-suggestions bg-white border rounded-lg p-5 shadow-sm">
       <h3 className="font-semibold mb-4 flex items-center gap-2">
-        <span className="text-purple-600">âœ¦</span> AI Insights
+        <span className="text-purple-600">✦</span> AI Insights
       </h3>
       
       <div className="space-y-4">
@@ -763,12 +4363,11 @@ export function AISuggestions() {
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ai\AITimeline.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React from "react";
@@ -807,12 +4406,12 @@ export function AITimeline({
             className={`ai-timeline-step ai-step-${status}`}
           >
             <div className="ai-step-icon">
-              {status === "complete" && "âœ“"}
+              {status === "complete" && "✓"}
               {status === "running" && (
                 <div className="spinner"></div>
               )}
-              {status === "error" && "âœ—"}
-              {status === "pending" && "â³"}
+              {status === "error" && "✗"}
+              {status === "pending" && "⏳"}
             </div>
             <div className="ai-step-content">
               <h4>{step.label}</h4>
@@ -827,12 +4426,11 @@ export function AITimeline({
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\analytics\AnalyticsView.tsx
 
-`	ypescript
+```tsx
 'use client';
 
 import React from 'react';
@@ -856,9 +4454,9 @@ export function AnalyticsView() {
         {/* KPIs */}
         <div className="analytics-kpis grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: 'Total Revenue', value: 'â‚¹18.4L', trend: '+12.5%', isPositive: true },
+            { label: 'Total Revenue', value: '₹18.4L', trend: '+12.5%', isPositive: true },
             { label: 'Conversion Rate', value: '34%', trend: '+4.2%', isPositive: true },
-            { label: 'Average Quote Value', value: 'â‚¹14,375', trend: '-2.1%', isPositive: false },
+            { label: 'Average Quote Value', value: '₹14,375', trend: '-2.1%', isPositive: false },
             { label: 'Response Time', value: '2.4 hrs', trend: '-15%', isPositive: true }
           ].map((kpi, i) => (
             <div key={i} className="bg-white dark:bg-zinc-800 p-5 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm">
@@ -866,7 +4464,7 @@ export function AnalyticsView() {
               <div className="flex items-end justify-between">
                 <div className="text-2xl font-bold text-zinc-900 dark:text-white">{kpi.value}</div>
                 <div className={`text-xs font-semibold px-2 py-1 rounded flex items-center gap-1 ${kpi.isPositive ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400'}`}>
-                  {kpi.isPositive ? 'â†‘' : 'â†“'} {kpi.trend.replace(/[+-]/, '')}
+                  {kpi.isPositive ? '↑' : '↓'} {kpi.trend.replace(/[+-]/, '')}
                 </div>
               </div>
             </div>
@@ -883,7 +4481,7 @@ export function AnalyticsView() {
                 <div key={i} className="w-full max-w-[40px] bg-indigo-500/20 rounded-t-sm relative group cursor-pointer hover:bg-indigo-500/40 transition-colors" style={{ height: `${h}%` }}>
                   <div className="absolute bottom-0 w-full bg-indigo-500 rounded-t-sm transition-all" style={{ height: `${h * 0.7}%` }}></div>
                   <div className="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-zinc-900 text-white text-xs py-1 px-2 rounded whitespace-nowrap z-10 transition-opacity">
-                    â‚¹{(h * 1234).toLocaleString()}
+                    ₹{(h * 1234).toLocaleString()}
                   </div>
                 </div>
               ))}
@@ -934,10 +4532,10 @@ export function AnalyticsView() {
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {[
-                    { name: 'Acme Corp', orders: 12, value: 'â‚¹4,50,000' },
-                    { name: 'TechFlow', orders: 8, value: 'â‚¹2,80,000' },
-                    { name: 'Global Ind', orders: 5, value: 'â‚¹1,95,000' },
-                    { name: 'StartUp Inc', orders: 4, value: 'â‚¹85,000' },
+                    { name: 'Acme Corp', orders: 12, value: '₹4,50,000' },
+                    { name: 'TechFlow', orders: 8, value: '₹2,80,000' },
+                    { name: 'Global Ind', orders: 5, value: '₹1,95,000' },
+                    { name: 'StartUp Inc', orders: 4, value: '₹85,000' },
                   ].map((c, i) => (
                     <tr key={i}>
                       <td className="px-5 py-3 font-medium text-sm text-zinc-900 dark:text-zinc-200">{c.name}</td>
@@ -953,8 +4551,8 @@ export function AnalyticsView() {
           <div className="analytics-comparison bg-gradient-to-br from-indigo-600 to-purple-700 p-6 rounded-xl shadow-md text-white flex flex-col justify-between">
             <div>
               <h3 className="font-bold text-indigo-100 mb-2">Monthly Comparison</h3>
-              <p className="text-3xl font-bold mb-1">â‚¹8.4L <span className="text-lg font-normal text-indigo-200">this month</span></p>
-              <p className="text-indigo-200 mb-6">vs â‚¹7.2L last month</p>
+              <p className="text-3xl font-bold mb-1">₹8.4L <span className="text-lg font-normal text-indigo-200">this month</span></p>
+              <p className="text-indigo-200 mb-6">vs ₹7.2L last month</p>
             </div>
             
             <div className="bg-white/10 backdrop-blur rounded-lg p-4 border border-white/20">
@@ -973,12 +4571,11 @@ export function AnalyticsView() {
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\customers\CustomerTimeline.tsx
 
-`	ypescript
+```tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
@@ -1000,7 +4597,7 @@ export function CustomerTimeline() {
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-white">Customers</h1>
         <div className="relative">
           <span className="absolute inset-y-0 left-3 flex items-center text-zinc-400">
-            ðŸ”
+            🔍
           </span>
           <input 
             type="text" 
@@ -1029,7 +4626,7 @@ export function CustomerTimeline() {
                 <p className="text-xs text-zinc-500 truncate">{customer.company}</p>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-xs font-semibold text-zinc-900 dark:text-white">â‚¹{customer.totalValue || '0'}</div>
+                <div className="text-xs font-semibold text-zinc-900 dark:text-white">₹{customer.totalValue || '0'}</div>
                 <div className="text-[10px] text-zinc-500">{customer.totalOrders || 0} orders</div>
               </div>
             </div>
@@ -1050,17 +4647,17 @@ export function CustomerTimeline() {
                   <p className="text-zinc-500 font-medium mb-4">{selectedCustomer.company}</p>
                   <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-sm">
                     <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
-                      <span>âœ‰</span> {selectedCustomer.email || 'customer@email.com'}
+                      <span>✉</span> {selectedCustomer.email || 'customer@email.com'}
                     </div>
                     <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-300">
-                      <span>ðŸ“ž</span> {selectedCustomer.phone || '+91 98765 43210'}
+                      <span>📞</span> {selectedCustomer.phone || '+91 98765 43210'}
                     </div>
                   </div>
                 </div>
                 <div className="flex flex-col gap-3 text-right">
                   <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-2 rounded-lg border border-zinc-100 dark:border-zinc-700">
                     <div className="text-xs text-zinc-500 mb-1">Total Value</div>
-                    <div className="font-bold text-lg text-purple-600 dark:text-purple-400">â‚¹{selectedCustomer.totalValue || '2,45,000'}</div>
+                    <div className="font-bold text-lg text-purple-600 dark:text-purple-400">₹{selectedCustomer.totalValue || '2,45,000'}</div>
                   </div>
                   <div className="bg-zinc-50 dark:bg-zinc-900 px-4 py-2 rounded-lg border border-zinc-100 dark:border-zinc-700">
                     <div className="text-xs text-zinc-500 mb-1">Total Orders</div>
@@ -1079,13 +4676,13 @@ export function CustomerTimeline() {
                   {(CUSTOMER_TIMELINE || []).map((event: any, idx: number) => {
                     const getIcon = (type: string) => {
                       switch (type) {
-                        case 'quotation': return 'â–£';
-                        case 'email': return 'âœ‰';
-                        case 'whatsapp': return 'ðŸ’¬';
-                        case 'followup': return 'â—·';
-                        case 'document': return 'ðŸ“„';
-                        case 'ai-note': return 'âœ¦';
-                        default: return 'â—ˆ';
+                        case 'quotation': return '▣';
+                        case 'email': return '✉';
+                        case 'whatsapp': return '💬';
+                        case 'followup': return '◷';
+                        case 'document': return '📄';
+                        case 'ai-note': return '✦';
+                        default: return '◈';
                       }
                     };
 
@@ -1121,7 +4718,7 @@ export function CustomerTimeline() {
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-zinc-400">
-              <span className="text-4xl mb-4">ðŸ‘¥</span>
+              <span className="text-4xl mb-4">👥</span>
               <p>Select a customer to view details</p>
             </div>
           )}
@@ -1130,54 +4727,115 @@ export function CustomerTimeline() {
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\dashboard\FollowUpsPanel.tsx
 
-`	ypescript
+```tsx
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { FOLLOWUPS } from "@/lib/constants";
+import { useToast } from "@/hooks/useToast";
 
 interface FollowUpsPanelProps {
   expanded?: boolean;
 }
 
 export function FollowUpsPanel({ expanded = false }: FollowUpsPanelProps) {
+  const [showAll, setShowAll] = useState(expanded);
+  const [actioned, setActioned] = useState<Record<number, boolean>>({});
+  const { notify } = useToast();
+
+  const handleAction = (idx: number, name: string, action: string) => {
+    setActioned((prev) => ({ ...prev, [idx]: true }));
+    notify(`🚀 ${action} successfully executed for ${name}!`);
+  };
+
+  const displayList = showAll ? FOLLOWUPS : FOLLOWUPS.slice(0, 3);
+
   return (
-    <div className={`panel followups ${expanded ? "expanded" : ""}`}>
-      <div className="panel-head">
+    <div className={`panel followups ${expanded ? "expanded" : ""} animate-fade-in`}>
+      <div className="panel-head" style={{ borderBottom: "1px solid var(--line)", paddingBottom: "14px", marginBottom: "4px" }}>
         <div>
-          <h3>{expanded ? "Follow-ups" : "Needs your attention"}</h3>
-          <p>Follow-ups due today</p>
+          <h3 style={{ fontSize: "18px", fontWeight: 800 }}>{expanded ? "Follow-ups & Outreach" : "Needs Your Attention"}</h3>
+          <p style={{ color: "var(--muted)", fontSize: "12px", marginTop: "2px" }}>Follow-ups and AI alerts due today</p>
         </div>
-        {!expanded && <button className="link-button">View all</button>}
-      </div>
-      {FOLLOWUPS.map((followup, i) => (
-        <div key={i} className="follow-row">
-          <span className="avatar" style={{ background: followup.color }}>
-            {followup.initials}
-          </span>
-          <div>
-            <b>{followup.name}</b>
-            <small>{followup.company} Â· {followup.note}</small>
-          </div>
-          <button onClick={() => alert(`${followup.action} prepared for ${followup.name}`)}>
-            {followup.action} â†’
+        {!expanded && (
+          <button
+            className="link-button"
+            onClick={() => setShowAll((p) => !p)}
+            style={{ fontWeight: 700, fontSize: "12px", color: "var(--lav)", background: "none", border: "none", cursor: "pointer" }}
+          >
+            {showAll ? "Show fewer" : `View all (${FOLLOWUPS.length})`}
           </button>
-        </div>
-      ))}
+        )}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {displayList.map((followup, i) => {
+          const isDone = !!actioned[i];
+          return (
+            <div
+              key={i}
+              className="follow-row"
+              style={{
+                padding: "14px 16px",
+                opacity: isDone ? 0.6 : 1,
+                transition: "all 0.3s var(--ease)",
+              }}
+            >
+              <span
+                className="avatar"
+                style={{
+                  background: followup.color || "var(--lav)",
+                  width: "34px",
+                  height: "34px",
+                  fontSize: "12px",
+                  fontWeight: 800,
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                }}
+              >
+                {followup.initials}
+              </span>
+              <div style={{ flex: 1, minWidth: 0, marginLeft: "8px" }}>
+                <b style={{ fontSize: "13px", color: isDone ? "var(--muted)" : "var(--ink)" }}>
+                  {followup.name}
+                  {isDone && <span style={{ color: "var(--green)", fontSize: "11px", marginLeft: "6px" }}>[Dispatched]</span>}
+                </b>
+                <small style={{ fontSize: "11px", color: "var(--muted)" }}>
+                  {followup.company} · {followup.note}
+                </small>
+              </div>
+              <button
+                onClick={() => handleAction(i, followup.name, followup.action)}
+                disabled={isDone}
+                style={{
+                  background: isDone ? "var(--green-bg)" : "linear-gradient(135deg, #f1edff, #e4dbff)",
+                  color: isDone ? "var(--green)" : "#6366f1",
+                  border: isDone ? "1px solid var(--green)" : "1px solid rgba(99, 102, 241, 0.2)",
+                  padding: "8px 14px",
+                  borderRadius: "var(--radius-sm)",
+                  fontWeight: 800,
+                  fontSize: "11px",
+                  cursor: isDone ? "default" : "pointer",
+                  transition: "all var(--duration) var(--ease)",
+                  boxShadow: isDone ? "none" : "0 2px 8px rgba(99, 102, 241, 0.15)",
+                }}
+              >
+                {isDone ? "✓ Dispatched" : `${followup.action} →`}
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\dashboard\HeroCard.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React from "react";
@@ -1190,10 +4848,10 @@ export function HeroCard({ onStart }: HeroCardProps) {
   return (
     <section className="hero-card">
       <div className="hero-copy">
-        <span className="ai-pill"><b>âœ¦</b> Operon AI Â· Your AI Business Employee</span>
+        <span className="ai-pill"><b>✦</b> Operon AI · Your AI Business Employee</span>
         <h2>Your entire business operations,<br /><i>automated autonomously.</i></h2>
-        <p>Iâ€™m Operon AI â€” your autonomous AI employee. I OCR documents, manage inventory &amp; CRM, process tenders, and build quotes instantly.</p>
-        <button onClick={onStart}>Launch AI Employee <span>â†’</span></button>
+        <p>I’m Operon AI — your autonomous AI employee. I OCR documents, manage inventory &amp; CRM, process tenders, and build quotes instantly.</p>
+        <button onClick={onStart}>Launch AI Employee <span>→</span></button>
       </div>
       <div className="hero-visual">
         <div className="orb orb-one"/>
@@ -1206,19 +4864,18 @@ export function HeroCard({ onStart }: HeroCardProps) {
           <div className="preview-lines">
             <i/><i/><i/><i/>
           </div>
-          <div className="preview-total">â‚¹ 90,440 <small>Verified OCR</small></div>
+          <div className="preview-total">₹ 90,440 <small>Verified OCR</small></div>
         </div>
-        <div className="spark">âœ¦</div>
+        <div className="spark">✦</div>
       </div>
     </section>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\dashboard\NotificationCenter.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React from "react";
@@ -1232,12 +4889,12 @@ interface NotificationCenterProps {
 
 const getIcon = (type: AppNotification["type"]) => {
   switch (type) {
-    case "quotation-ready": return "âœ¦";
-    case "review-required": return "âš ";
-    case "low-stock": return "âœ—";
-    case "customer-reply": return "âœ‰";
-    case "pending-followup": return "â—·";
-    default: return "â„¹";
+    case "quotation-ready": return "✦";
+    case "review-required": return "⚠";
+    case "low-stock": return "✗";
+    case "customer-reply": return "✉";
+    case "pending-followup": return "◷";
+    default: return "ℹ";
   }
 };
 
@@ -1265,12 +4922,11 @@ export function NotificationCenter({ isOpen, onClose }: NotificationCenterProps)
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\dashboard\RecentQuotations.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -1285,22 +4941,29 @@ import type { Quotation } from "@/types";
 
 export function RecentQuotations() {
   const [quotesList, setQuotesList] = useState<Quotation[]>([]);
+  const [showAll, setShowAll] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
   const { notify } = useToast();
 
   useEffect(() => {
-    setQuotesList(getQuotations().slice(0, 5));
+    const all = getQuotations();
+    setTotalCount(all.length);
+    setQuotesList(showAll ? all : all.slice(0, 5));
+
     const handleUpdate = () => {
-      setQuotesList(getQuotations().slice(0, 5));
+      const updatedAll = getQuotations();
+      setTotalCount(updatedAll.length);
+      setQuotesList(showAll ? updatedAll : updatedAll.slice(0, 5));
     };
     window.addEventListener("operon_ai_quotations_updated", handleUpdate);
     return () => window.removeEventListener("operon_ai_quotations_updated", handleUpdate);
-  }, []);
+  }, [showAll]);
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm(`Are you sure you want to delete quotation ${id}?`)) {
       deleteQuotation(id);
-      notify(`ðŸ—‘ï¸ Deleted quotation ${id}`);
+      notify(`🗑️ Deleted quotation ${id}`);
     }
   };
 
@@ -1320,9 +4983,9 @@ export function RecentQuotations() {
           customerName: quote.customer,
           date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
         });
-        notify(`ðŸ“„ Downloaded PDF for ${quote.id}`);
+        notify(`📄 Downloaded PDF for ${quote.id}`);
       } else {
-        await downloadQuotationExcel({
+        const res = await downloadQuotationExcel({
           brand,
           company,
           items,
@@ -1333,22 +4996,29 @@ export function RecentQuotations() {
           customerName: quote.customer,
           date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
         });
-        notify(`ðŸ“Š Downloaded Excel for ${quote.id}`);
+        notify(`📊 Downloaded Excel for ${quote.id}`);
+        res?.warnings?.forEach((w) => notify(w));
       }
     } catch (err: any) {
       console.error("Quick download failed:", err);
-      notify(`âš ï¸ Download failed: ${err.message || "Please check quotation data"}`);
+      notify(`⚠️ Download failed: ${err.message || "Please check quotation data"}`);
     }
   };
 
   return (
-    <section className="panel recent">
-      <div className="panel-head">
+    <section className="panel recent animate-fade-in">
+      <div className="panel-head" style={{ borderBottom: "1px solid var(--line)", paddingBottom: "16px" }}>
         <div>
-          <h3>Recent quotations</h3>
-          <p>Latest activity across your team</p>
+          <h3 style={{ fontSize: "20px", fontWeight: 800 }}>{showAll ? "All Team Quotations" : "Recent Quotations"}</h3>
+          <p style={{ color: "var(--muted)", fontSize: "12px", marginTop: "2px" }}>Latest activity across your sales operations</p>
         </div>
-        <button className="link-button">View all quotations</button>
+        <button
+          className="link-button"
+          onClick={() => setShowAll((prev) => !prev)}
+          style={{ fontWeight: 800, fontSize: "12px", color: "var(--lav)", cursor: "pointer", background: "none", border: "none" }}
+        >
+          {showAll ? "Show recent only (Top 5)" : `View all quotations (${totalCount})`}
+        </button>
       </div>
       <div className="quote-table">
         <div className="table-row table-head">
@@ -1375,21 +5045,21 @@ export function RecentQuotations() {
                 title="Download Quotation PDF"
                 className="px-2 py-0.5 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 font-bold text-[11px] rounded border border-red-200 dark:border-red-800 transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
               >
-                <span>ðŸ“„</span> PDF
+                <span>📄</span> PDF
               </button>
               <button
                 onClick={() => handleDownload(quote, "excel")}
                 title="Download Quotation Excel"
                 className="px-2 py-0.5 bg-green-50 dark:bg-green-950/40 hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400 font-bold text-[11px] rounded border border-green-200 dark:border-green-800 transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
               >
-                <span>ðŸ“Š</span> Excel
+                <span>📊</span> Excel
               </button>
               <button
                 onClick={(e) => handleDelete(quote.id, e)}
                 title="Delete Quotation"
                 className="px-2 py-0.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-red-100 dark:hover:bg-red-950 text-zinc-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 font-bold text-[11px] rounded border border-zinc-200 dark:border-zinc-700 hover:border-red-300 transition-all flex items-center justify-center cursor-pointer shadow-2xs"
               >
-                <span>ðŸ—‘ï¸</span> Delete
+                <span>🗑️</span> Delete
               </button>
             </div>
           </div>
@@ -1403,12 +5073,11 @@ export function RecentQuotations() {
     </section>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\dashboard\RevenueChart.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React from "react";
@@ -1428,10 +5097,10 @@ export function RevenueChart() {
       </div>
       <div className="chart">
         <div className="y-axis">
-          <span>â‚¹6L</span>
-          <span>â‚¹4L</span>
-          <span>â‚¹2L</span>
-          <span>â‚¹0</span>
+          <span>₹6L</span>
+          <span>₹4L</span>
+          <span>₹2L</span>
+          <span>₹0</span>
         </div>
         <div className="chart-area">
           <div className="grid-lines"/>
@@ -1458,12 +5127,11 @@ export function RevenueChart() {
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\dashboard\StatsGrid.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React from "react";
@@ -1478,81 +5146,405 @@ export function StatsGrid() {
           <p>{stat.label}</p>
           <h3>{stat.value}</h3>
           <small className={stat.positive ? "positive" : ""}>
-            {stat.positive ? "â†— " : ""}{stat.change}
+            {stat.positive ? "↗ " : ""}{stat.change}
           </small>
         </div>
       ))}
     </section>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\dashboard\TasksWidget.tsx
 
-`	ypescript
+```tsx
 /* eslint-disable react/no-unescaped-entities */
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { TASKS } from "@/lib/constants";
+import { useToast } from "@/hooks/useToast";
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  description: string;
+  priority: "high" | "medium" | "low";
+  status: "pending" | "completed";
+  type: string;
+}
+
+const STORAGE_KEY = "operon_ai_custom_tasks";
 
 export function TasksWidget() {
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [filter, setFilter] = useState<"all" | "pending" | "completed">("all");
+
+  // Form states
+  const [newTitle, setNewTitle] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newPriority, setNewPriority] = useState<"high" | "medium" | "low">("high");
+  const [newType, setNewType] = useState<string>("follow-up");
+
+  const { notify } = useToast();
+
+  // Load from localStorage or defaults
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        setTasks(JSON.parse(stored));
+      } else {
+        setTasks(TASKS as TaskItem[]);
+      }
+    } catch (e) {
+      setTasks(TASKS as TaskItem[]);
+    }
+  }, []);
+
+  const saveTasks = (newTasks: TaskItem[]) => {
+    setTasks(newTasks);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newTasks));
+    } catch (e) {
+      console.error("Failed to save tasks", e);
+    }
+  };
+
+  const handleAddTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim()) {
+      notify("⚠️ Please enter a task title.");
+      return;
+    }
+
+    const newTask: TaskItem = {
+      id: `t-${Date.now()}`,
+      title: newTitle.trim(),
+      description: newDesc.trim() || "User assigned action item",
+      priority: newPriority,
+      status: "pending",
+      type: newType,
+    };
+
+    saveTasks([newTask, ...tasks]);
+    setNewTitle("");
+    setNewDesc("");
+    setShowAddForm(false);
+    notify("✅ New task successfully added to workspace!");
+  };
+
+  const toggleComplete = (id: string) => {
+    const updated = tasks.map((t) => {
+      if (t.id === id) {
+        const isNowDone = t.status !== "completed";
+        notify(isNowDone ? "🎉 Task marked as completed!" : "🔄 Task re-opened");
+        return { ...t, status: (isNowDone ? "completed" : "pending") as "completed" | "pending" };
+      }
+      return t;
+    });
+    saveTasks(updated);
+  };
+
+  const deleteTask = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const filtered = tasks.filter((t) => t.id !== id);
+    saveTasks(filtered);
+    notify("🗑️ Task removed from workspace.");
+  };
+
+  const filteredTasks = tasks.filter((t) => {
+    if (filter === "pending") return t.status === "pending";
+    if (filter === "completed") return t.status === "completed";
+    return true;
+  });
+
   return (
-    <div className="panel tasks-widget">
-      <div className="panel-head">
+    <div className="panel tasks-widget animate-fade-in">
+      <div className="panel-head" style={{ borderBottom: "1px solid var(--line)", paddingBottom: "16px", marginBottom: "8px" }}>
         <div>
-          <h3>Today's Tasks</h3>
+          <h3 style={{ fontSize: "20px", fontWeight: 800 }}>Action & Task Workspace</h3>
+          <p style={{ color: "var(--muted)", fontSize: "12px", marginTop: "4px" }}>
+            Manage action items and AI automated recommendations
+          </p>
         </div>
-        <span
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <button
+            onClick={() => setShowAddForm((prev) => !prev)}
+            style={{
+              background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+              color: "#fff",
+              border: "none",
+              padding: "9px 16px",
+              borderRadius: "var(--radius-md)",
+              fontSize: "12px",
+              fontWeight: 800,
+              cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(99, 102, 241, 0.3)",
+              transition: "all var(--duration) var(--ease)",
+            }}
+          >
+            {showAddForm ? "✕ Close Form" : "＋ Add Task"}
+          </button>
+        </div>
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{ padding: "8px 18px", display: "flex", gap: "8px", borderBottom: "1px solid var(--line)" }}>
+        {(["all", "pending", "completed"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            style={{
+              background: filter === f ? "var(--soft)" : "transparent",
+              color: filter === f ? "var(--lav)" : "var(--muted)",
+              border: "1px solid",
+              borderColor: filter === f ? "var(--lav)" : "transparent",
+              padding: "5px 12px",
+              borderRadius: "99px",
+              fontSize: "11px",
+              fontWeight: filter === f ? 700 : 600,
+              cursor: "pointer",
+              textTransform: "capitalize",
+              transition: "all var(--duration) var(--ease)",
+            }}
+          >
+            {f} ({tasks.filter((t) => (f === "all" ? true : t.status === f)).length})
+          </button>
+        ))}
+      </div>
+
+      {/* Smooth Inline Add Form */}
+      {showAddForm && (
+        <form
+          onSubmit={handleAddTask}
           style={{
-            background: "var(--lav)",
-            color: "white",
-            padding: "2px 8px",
-            borderRadius: 12,
-            fontSize: 10,
-            fontWeight: "bold",
+            background: "var(--soft)",
+            padding: "20px 24px",
+            borderBottom: "1px solid var(--line)",
+            display: "grid",
+            gap: "14px",
+            animation: "slide-in-up 0.25s ease-out",
           }}
         >
-          {TASKS.length}
-        </span>
-      </div>
-      <div>
-        {TASKS.map((task, i) => (
-          <div key={i} className="task-item">
-            <span className={`task-priority ${task.priority}`} />
-            <div className="task-info">
-              <h4>{task.title}</h4>
-              <p>{task.description}</p>
-            </div>
-            <span className={`task-type-badge ${task.type}`}>
-              {task.type.replace("-", " ")}
-            </span>
-            <button
+          <div style={{ display: "grid", gap: "6px" }}>
+            <label style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--muted)" }}>
+              Task Title
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Confirm stock availability with vendor for Medline PO"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
               style={{
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: "var(--radius-sm)",
                 border: "1px solid var(--line)",
                 background: "var(--surface)",
-                padding: "6px 12px",
+                color: "var(--ink)",
+                fontSize: "13px",
+                outline: "none",
+              }}
+            />
+          </div>
+
+          <div style={{ display: "grid", gap: "6px" }}>
+            <label style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--muted)" }}>
+              Description / Action Context (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Ensure GST rate is updated to 12% before dispatch"
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "9px 14px",
                 borderRadius: "var(--radius-sm)",
-                fontSize: 10,
-                fontWeight: "bold",
+                border: "1px solid var(--line)",
+                background: "var(--surface)",
+                color: "var(--ink)",
+                fontSize: "12px",
+                outline: "none",
+              }}
+            />
+          </div>
+
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--muted)" }}>
+                Priority
+              </label>
+              <select
+                value={newPriority}
+                onChange={(e) => setNewPriority(e.target.value as "high" | "medium" | "low")}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--line)",
+                  background: "var(--surface)",
+                  color: "var(--ink)",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <option value="high">🔴 High Priority</option>
+                <option value="medium">🟡 Medium Priority</option>
+                <option value="low">🟢 Low Priority</option>
+              </select>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: "var(--muted)" }}>
+                Category Tag
+              </label>
+              <select
+                value={newType}
+                onChange={(e) => setNewType(e.target.value)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid var(--line)",
+                  background: "var(--surface)",
+                  color: "var(--ink)",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                <option value="follow-up">Follow-up</option>
+                <option value="review">Quotation Review</option>
+                <option value="ai-suggestion">AI Recommendation</option>
+                <option value="admin">Operations</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "4px" }}>
+            <button
+              type="button"
+              onClick={() => setShowAddForm(false)}
+              style={{
+                padding: "8px 16px",
+                background: "transparent",
+                border: "1px solid var(--line)",
+                borderRadius: "var(--radius-sm)",
+                color: "var(--muted)",
+                fontSize: "12px",
+                fontWeight: 600,
                 cursor: "pointer",
               }}
             >
-              Action
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={{
+                padding: "8px 20px",
+                background: "var(--ink)",
+                color: "var(--surface)",
+                border: "none",
+                borderRadius: "var(--radius-sm)",
+                fontSize: "12px",
+                fontWeight: 800,
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              }}
+            >
+              Save & Apply Task
             </button>
           </div>
-        ))}
+        </form>
+      )}
+
+      {/* Task list with smooth animations */}
+      <div style={{ minHeight: "120px" }}>
+        {filteredTasks.map((task) => {
+          const isDone = task.status === "completed";
+          return (
+            <div
+              key={task.id}
+              className="task-item"
+              style={{
+                opacity: isDone ? 0.65 : 1,
+                transition: "all 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+              }}
+            >
+              <span className={`task-priority ${task.priority}`} title={`Priority: ${task.priority}`} />
+              
+              <div className="task-info" style={{ textDecoration: isDone ? "line-through" : "none" }}>
+                <h4 style={{ color: isDone ? "var(--muted)" : "var(--ink)", display: "flex", alignItems: "center", gap: "6px" }}>
+                  {task.title}
+                  {isDone && <span style={{ fontSize: "10px", color: "var(--green)" }}>[Completed]</span>}
+                </h4>
+                <p>{task.description}</p>
+              </div>
+
+              <span className={`task-type-badge ${task.type}`} style={{ textTransform: "capitalize" }}>
+                {task.type.replace("-", " ")}
+              </span>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  onClick={() => toggleComplete(task.id)}
+                  title={isDone ? "Reopen Task" : "Mark Done"}
+                  style={{
+                    border: isDone ? "1px solid var(--green)" : "1px solid var(--line)",
+                    background: isDone ? "var(--green-bg)" : "var(--surface)",
+                    color: isDone ? "var(--green)" : "var(--ink)",
+                    padding: "7px 12px",
+                    borderRadius: "var(--radius-sm)",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    transition: "all var(--duration) var(--ease)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    boxShadow: isDone ? "0 0 10px rgba(16, 185, 129, 0.2)" : "none",
+                  }}
+                >
+                  {isDone ? "✓ Done" : "Mark Done"}
+                </button>
+                <button
+                  onClick={(e) => deleteTask(task.id, e)}
+                  title="Delete Task"
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--muted)",
+                    padding: "6px",
+                    cursor: "pointer",
+                    fontSize: "14px",
+                    transition: "color var(--duration) var(--ease)",
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.color = "var(--red)")}
+                  onMouseOut={(e) => (e.currentTarget.style.color = "var(--muted)")}
+                >
+                  🗑️
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {filteredTasks.length === 0 && (
+          <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--muted)", fontSize: "13px" }}>
+            {filter === "completed" ? "No completed tasks yet." : "No action items pending. Click '＋ Add Task' above to create one!"}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\layout\Sidebar.tsx
 
-`	ypescript
+```tsx
 'use client';
 import { NAV_ITEMS } from '@/lib/constants';
 import { ActiveView } from '@/types';
@@ -1561,20 +5553,24 @@ interface SidebarProps {
   active: ActiveView;
   onNavigate: (view: ActiveView) => void;
   onSettings: () => void;
-  onToggleCopilot?: () => void;
+  collapsed?: boolean;
 }
 
-export function Sidebar({ active, onNavigate, onSettings, onToggleCopilot }: SidebarProps) {
+export function Sidebar({ active, onNavigate, onSettings, collapsed = false }: SidebarProps) {
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
       <div className="brand">
-        <span className="brand-mark">O</span>
-        <span>operon<span>ai</span></span>
+        <span className="brand-mark" title="Operon AI">O</span>
+        {!collapsed && <span>operon<span>ai</span></span>}
       </div>
-      <div className="company-switch">
+      <div className="company-switch" title="Operon AI Officer · Medline Workspace">
         <span className="company-icon">O</span>
-        <span><b>Operon AI Officer</b><small>Medline Workspace</small></span>
-        <span className="chevron">âŒ„</span>
+        {!collapsed && (
+          <>
+            <span><b>Operon AI Officer</b><small>Medline Workspace</small></span>
+            <span className="chevron">⌄</span>
+          </>
+        )}
       </div>
       <nav>
         {NAV_ITEMS.map(({name, icon, badge}) => (
@@ -1582,35 +5578,45 @@ export function Sidebar({ active, onNavigate, onSettings, onToggleCopilot }: Sid
             key={name} 
             className={active === name ? "nav-item active" : "nav-item"} 
             onClick={() => onNavigate(name as ActiveView)}
+            title={collapsed ? `${name}${badge ? ` (${badge})` : ""}` : undefined}
           >
-            <i>{icon}</i>{name}{badge && <em>{badge}</em>}
+            <i>{icon}</i>
+            {!collapsed && name}
+            {!collapsed && badge && <em>{badge}</em>}
           </button>
         ))}
       </nav>
       <div className="sidebar-bottom">
-        {onToggleCopilot && (
-          <button className="nav-item" onClick={onToggleCopilot}>
-            <i>âš¡</i>AI Copilot
-          </button>
-        )}
-        <button className="nav-item" onClick={onSettings}>
-          <i>âš™</i>Settings
+        <button 
+          className="nav-item" 
+          onClick={onSettings}
+          title={collapsed ? "Settings" : undefined}
+        >
+          <i>⚙</i>
+          {!collapsed && "Settings"}
         </button>
-        <button className="profile">
+        <button 
+          className="profile"
+          title={collapsed ? "Abhishek Jha (Admin)" : undefined}
+        >
           <span>AJ</span>
-          <b>Abhishek Jha<small>Admin</small></b>
-          <i>â‹®</i>
+          {!collapsed && (
+            <>
+              <b>Abhishek Jha<small>Admin</small></b>
+              <i>⋮</i>
+            </>
+          )}
         </button>
       </div>
     </aside>
   );
 }
 
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\layout\Topbar.tsx
 
-`	ypescript
+```tsx
 'use client';
 import { getGreeting, getDateString } from '@/lib/utils';
 import { ActiveView } from '@/types';
@@ -1623,6 +5629,8 @@ interface TopbarProps {
   theme: string;
   notificationCount?: number;
   onNotifications?: () => void;
+  isSidebarCollapsed?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 export function Topbar({ 
@@ -1632,33 +5640,376 @@ export function Topbar({
   onToggleTheme, 
   theme, 
   notificationCount = 0, 
-  onNotifications 
+  onNotifications,
+  isSidebarCollapsed = false,
+  onToggleSidebar
 }: TopbarProps) {
   return (
     <header className="topbar">
-      <div>
-        <p className="eyebrow">{getDateString()}</p>
-        <h1>{active === "Overview" ? getGreeting() + ", Abhishek" : active}</h1>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        {onToggleSidebar && (
+          <button 
+            onClick={onToggleSidebar} 
+            className="icon-button" 
+            title={isSidebarCollapsed ? "Expand Sidebar (Cmd/Ctrl+B)" : "Collapse Sidebar (Cmd/Ctrl+B)"}
+            style={{ fontSize: "17px" }}
+          >
+            {isSidebarCollapsed ? "☰" : "◫"}
+          </button>
+        )}
+        <div>
+          <p className="eyebrow">{getDateString()}</p>
+          <h1>{active === "Overview" ? getGreeting() + ", Abhishek" : active}</h1>
+        </div>
       </div>
       <div className="top-actions">
-        <button className="icon-button" onClick={onSearch}>âŒ•</button>
-        <button className="icon-button notification" onClick={onNotifications}>
-          â™§{notificationCount > 0 && <span />}
+        <button className="icon-button" onClick={onSearch} title="Search (Cmd/Ctrl+K)">⌕</button>
+        <button className="icon-button notification" onClick={onNotifications} title="Notifications">
+          ♧{notificationCount > 0 && <span />}
         </button>
-        <button className="icon-button" onClick={onToggleTheme}>
-          {theme === 'dark' ? 'â˜½' : 'â˜€'}
+        <button className="icon-button" onClick={onToggleTheme} title="Toggle Theme">
+          {theme === 'dark' ? '☽' : '☀'}
         </button>
-        <button className="new-quote" onClick={onNewQuote}>ï¼‹ New quotation</button>
+        <button className="new-quote" onClick={onNewQuote}>＋ New quotation</button>
       </div>
     </header>
   );
 }
+```
 
-``n
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\marketing\AIMarketingView.tsx
+
+```tsx
+"use client";
+
+import React, { useState } from "react";
+import type { CompanySettings } from "@/types";
+import { generateMarketingMessage } from "@/services/marketing";
+
+interface AIMarketingViewProps {
+  company: CompanySettings;
+  onCompanyChange: (c: CompanySettings) => void;
+  notify: (msg: string) => void;
+}
+
+type Channel = "whatsapp" | "email" | "instagram";
+
+const CHANNELS: { id: Channel; label: string; emoji: string; color: string; hint: string }[] = [
+  { id: "whatsapp",  label: "WhatsApp",  emoji: "💬", color: "#16a34a", hint: "Short broadcast message, under 500 chars" },
+  { id: "email",     label: "Email",     emoji: "📧", color: "#4f46e5", hint: "Subject line + professional email body" },
+  { id: "instagram", label: "Instagram", emoji: "📸", color: "#e1306c", hint: "Caption with emojis and hashtags" },
+];
+
+const TONE_VARIANTS = ["professional and formal", "professional and confident", "professional and concise", "professional and authoritative", "professional and courteous"];
+
+export function AIMarketingView({ company, onCompanyChange, notify }: AIMarketingViewProps) {
+  const [channel, setChannel] = useState<Channel>("whatsapp");
+  const [messageIntent, setMessageIntent] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [result, setResult] = useState<{ message: string; subject?: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [regenerateCount, setRegenerateCount] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  const activeChannel = CHANNELS.find((c) => c.id === channel)!;
+
+  const handleChannelChange = (ch: Channel) => {
+    setChannel(ch);
+    setResult(null);
+    setError(null);
+  };
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    setError(null);
+    setResult(null);
+    setCopied(false);
+    try {
+      const tone = TONE_VARIANTS[regenerateCount % TONE_VARIANTS.length];
+      const res = await generateMarketingMessage(
+        messageIntent,
+        channel,
+        company.businessDescription || undefined,
+        tone
+      );
+      setResult(res);
+      setRegenerateCount((n) => n + 1);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (!result) return;
+    const text =
+      channel === "email" && result.subject
+        ? `Subject: ${result.subject}\n\n${result.message}`
+        : result.message;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      notify("📋 Copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div style={{ padding: "28px 32px", maxWidth: 780, margin: "0 auto" }}>
+
+      {/* ── Header ── */}
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, letterSpacing: "-0.3px" }}>
+          📣 AI Marketing Assistant
+        </h1>
+        <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 6, marginBottom: 0, lineHeight: 1.6 }}>
+          Tell the AI what message you need, choose your platform, and get a polished, copyable message instantly.
+          {company.businessDescription
+            ? " Your business context from Settings is automatically included."
+            : " Add your business description in Settings to improve results."}
+        </p>
+      </div>
+
+      {/* ── Channel Selector ── */}
+      <div style={{ marginBottom: 24 }}>
+        <label style={labelStyle}>Select Platform</label>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {CHANNELS.map((ch) => {
+            const isActive = channel === ch.id;
+            return (
+              <button
+                key={ch.id}
+                type="button"
+                id={`mkt-channel-${ch.id}`}
+                onClick={() => handleChannelChange(ch.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "9px 20px",
+                  borderRadius: 10,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  border: `2px solid ${isActive ? ch.color : "var(--line)"}`,
+                  background: isActive ? ch.color : "var(--card)",
+                  color: isActive ? "#fff" : "var(--text)",
+                  transition: "all 0.15s",
+                  boxShadow: isActive ? `0 2px 12px ${ch.color}44` : "none",
+                }}
+              >
+                <span style={{ fontSize: 16 }}>{ch.emoji}</span>
+                {ch.label}
+              </button>
+            );
+          })}
+        </div>
+        <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>
+          {activeChannel.hint}
+        </p>
+      </div>
+
+      {/* ── Message Intent ── */}
+      <div style={{ marginBottom: 20 }}>
+        <label htmlFor="mkt-intent" style={labelStyle}>
+          What should the message be about?
+        </label>
+        <textarea
+          id="mkt-intent"
+          rows={3}
+          style={textareaStyle}
+          placeholder={
+            channel === "whatsapp"
+              ? "e.g. Announce a 10% discount on BP monitors this week for all hospitals in our list."
+              : channel === "email"
+              ? "e.g. Introduce our new ECG machine model with a special launch offer for existing clients."
+              : "e.g. Showcase our fast delivery service for diagnostic equipment across Mumbai."
+          }
+          value={messageIntent}
+          onChange={(e) => setMessageIntent(e.target.value)}
+        />
+      </div>
+
+      {/* ── Generate Button ── */}
+      <button
+        id="mkt-generate-btn"
+        type="button"
+        onClick={handleGenerate}
+        disabled={isGenerating || !messageIntent.trim()}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "10px 26px",
+          borderRadius: 10,
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: isGenerating || !messageIntent.trim() ? "not-allowed" : "pointer",
+          border: "none",
+          background: activeChannel.color,
+          color: "#fff",
+          opacity: isGenerating || !messageIntent.trim() ? 0.5 : 1,
+          transition: "opacity 0.15s",
+          marginBottom: 24,
+          boxShadow: `0 2px 14px ${activeChannel.color}55`,
+        }}
+      >
+        {isGenerating ? "⏳ Generating…" : `✨ Generate ${activeChannel.label} Message`}
+      </button>
+
+      {/* ── Error ── */}
+      {error && (
+        <div style={{
+          padding: "10px 14px",
+          borderRadius: 10,
+          background: "#fef2f2",
+          border: "1px solid #fca5a5",
+          color: "#b91c1c",
+          fontSize: 13,
+          marginBottom: 20,
+          lineHeight: 1.5,
+        }}>
+          ⚠️ {error}
+        </div>
+      )}
+
+      {/* ── Result ── */}
+      {result && (
+        <div style={{
+          background: "var(--card)",
+          border: "1px solid var(--line)",
+          borderRadius: 14,
+          padding: "20px 22px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}>
+          {/* Subject line (email only) */}
+          {channel === "email" && result.subject && (
+            <div>
+              <p style={resultLabelStyle}>Subject Line</p>
+              <div style={{
+                padding: "9px 13px",
+                borderRadius: 8,
+                background: "var(--soft)",
+                border: "1px solid var(--line)",
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--text)",
+                lineHeight: 1.5,
+              }}>
+                {result.subject}
+              </div>
+            </div>
+          )}
+
+          {/* Message body */}
+          <div>
+            <p style={resultLabelStyle}>
+              {channel === "email" ? "Email Body" : channel === "instagram" ? "Instagram Caption" : "WhatsApp Message"}
+            </p>
+            <textarea
+              id="mkt-result-output"
+              readOnly
+              rows={channel === "email" ? 9 : channel === "instagram" ? 6 : 5}
+              style={{
+                ...textareaStyle,
+                background: "var(--soft)",
+                cursor: "default",
+                lineHeight: 1.75,
+              }}
+              value={result.message}
+            />
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              id="mkt-copy-btn"
+              type="button"
+              onClick={handleCopy}
+              style={{
+                ...outlineButtonStyle,
+                background: copied ? activeChannel.color : "var(--card)",
+                color: copied ? "#fff" : "var(--text)",
+                borderColor: copied ? activeChannel.color : "var(--line)",
+              }}
+            >
+              {copied ? "✅ Copied!" : "📋 Copy"}
+            </button>
+            <button
+              id="mkt-regenerate-btn"
+              type="button"
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              style={{
+                ...outlineButtonStyle,
+                opacity: isGenerating ? 0.5 : 1,
+                cursor: isGenerating ? "not-allowed" : "pointer",
+              }}
+            >
+              🔄 Regenerate
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Shared style constants ──────────────────────
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 700,
+  color: "var(--muted)",
+  marginBottom: 8,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+};
+
+const textareaStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 14px",
+  fontSize: 13,
+  borderRadius: 10,
+  border: "1px solid var(--line)",
+  background: "var(--card)",
+  color: "var(--text)",
+  resize: "vertical",
+  outline: "none",
+  boxSizing: "border-box",
+  lineHeight: 1.6,
+  fontFamily: "inherit",
+};
+
+const resultLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: "var(--muted)",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  marginBottom: 8,
+  marginTop: 0,
+};
+
+const outlineButtonStyle: React.CSSProperties = {
+  padding: "8px 20px",
+  borderRadius: 8,
+  fontSize: 12,
+  fontWeight: 600,
+  cursor: "pointer",
+  border: "1px solid var(--line)",
+  background: "var(--card)",
+  color: "var(--text)",
+  transition: "all 0.15s",
+};
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ocr\OCRHub.tsx
 
-`	ypescript
+```tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -1781,7 +6132,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
     const { learnedProducts } = autoLearnProductsFromQuoteItems(editableItems);
     setSynced(true);
     if (learnedProducts.length > 0) {
-      notify(`Verified & synced! ðŸ¤– Auto-learned ${learnedProducts.length} new item(s) into Company Catalog!`);
+      notify(`Verified & synced! 🤖 Auto-learned ${learnedProducts.length} new item(s) into Company Catalog!`);
     } else {
       notify("Verified & synced to Medline CRM and Inventory Database!");
     }
@@ -1810,7 +6161,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
 
   return (
     <div className="ocr-hub-container" style={{ padding: "0 24px 40px", maxWidth: 1400, margin: "0 auto" }}>
-      {/* â”€â”€ Hero Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Hero Header ────────────────────────────────────────────── */}
       <div className="ocr-hero" style={{
         background: "linear-gradient(135deg, rgba(112,82,215,0.15) 0%, rgba(37,99,235,0.1) 100%)",
         border: "1px solid rgba(112,82,215,0.25)",
@@ -1824,13 +6175,13 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 20 }}>
           <div>
             <span className="ai-pill" style={{ display: "inline-flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
-              <b style={{ color: "#7052d7" }}>âœ¦</b> Operon AI Â· Autonomous Employee Feature
+              <b style={{ color: "#7052d7" }}>✦</b> Operon AI · Autonomous Employee Feature
             </span>
             <h2 style={{ fontSize: 28, fontWeight: 800, margin: "0 0 8px 0", letterSpacing: "-0.03em" }}>
               OCR &amp; Document Intelligence Center
             </h2>
             <p style={{ margin: 0, color: "var(--muted)", maxWidth: 640, fontSize: 15, lineHeight: 1.6 }}>
-              Your AI employee reads and understands complex unstructured business documents â€” from hospital purchase orders and multi-page tenders to WhatsApp screenshots and handwritten doctor notes.
+              Your AI employee reads and understands complex unstructured business documents — from hospital purchase orders and multi-page tenders to WhatsApp screenshots and handwritten doctor notes.
             </p>
           </div>
 
@@ -1848,7 +6199,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
               boxShadow: "0 4px 14px rgba(112,82,215,0.35)",
               transition: "transform 0.2s, box-shadow 0.2s"
             }}>
-              <span>ðŸ“„</span> Upload Real File (PDF / Image / Excel)
+              <span>📄</span> Upload Real File (PDF / Image / Excel)
               <input 
                 type="file" 
                 accept=".pdf,.jpg,.jpeg,.png,.webp,.xlsx,.xls,.csv,.txt" 
@@ -1863,11 +6214,11 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginTop: 28, paddingTop: 24, borderTop: "1px solid rgba(112,82,215,0.15)" }}>
           <div style={{ background: "var(--card-bg)", padding: "16px 20px", borderRadius: 14, border: "1px solid var(--line)" }}>
             <small style={{ color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", fontSize: 11 }}>Docs Processed</small>
-            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>348 <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>â†‘ 24 today</span></div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>348 <span style={{ fontSize: 13, color: "#16a34a", fontWeight: 600 }}>↑ 24 today</span></div>
           </div>
           <div style={{ background: "var(--card-bg)", padding: "16px 20px", borderRadius: 14, border: "1px solid var(--line)" }}>
             <small style={{ color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", fontSize: 11 }}>Avg AI Confidence</small>
-            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>96.4% <span style={{ fontSize: 13, color: "#7052d7", fontWeight: 600 }}>âœ¦ High</span></div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4 }}>96.4% <span style={{ fontSize: 13, color: "#7052d7", fontWeight: 600 }}>✦ High</span></div>
           </div>
           <div style={{ background: "var(--card-bg)", padding: "16px 20px", borderRadius: 14, border: "1px solid var(--line)" }}>
             <small style={{ color: "var(--muted)", fontWeight: 600, textTransform: "uppercase", fontSize: 11 }}>Catalog Auto-Match</small>
@@ -1880,7 +6231,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
         </div>
       </div>
 
-      {/* â”€â”€ Processing Overlay / Progress Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── Processing Overlay / Progress Bar ──────────────────────── */}
       {isProcessing && (
         <div style={{
           background: "var(--card-bg)",
@@ -1892,7 +6243,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
           textAlign: "center"
         }}>
           <div style={{ display: "inline-block", padding: "10px 18px", borderRadius: 30, background: "rgba(112,82,215,0.1)", color: "#7052d7", fontWeight: 700, fontSize: 14, marginBottom: 16 }}>
-            âš¡ Operon AI Neural OCR Engine Active
+            ⚡ Operon AI Neural OCR Engine Active
           </div>
           <h3 style={{ margin: "0 0 12px 0", fontSize: 18 }}>{statusText}</h3>
           <div style={{ width: "100%", maxWidth: 480, height: 10, background: "var(--line)", borderRadius: 10, margin: "0 auto", overflow: "hidden" }}>
@@ -1905,12 +6256,12 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
             }} />
           </div>
           <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 12 }}>
-            Extracting text Â· Recognizing table layouts Â· Semantic matching against Medline catalog ({progress}%)
+            Extracting text · Recognizing table layouts · Semantic matching against Medline catalog ({progress}%)
           </p>
         </div>
       )}
 
-      {/* â”€â”€ 1-Click Test Drive / Pre-Loaded Samples â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── 1-Click Test Drive / Pre-Loaded Samples ─────────────────── */}
       {!currentResult && !isProcessing && (
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
@@ -1994,7 +6345,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                   <p style={{ margin: 0, fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>{sample.subtitle}</p>
                 </div>
                 <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <small style={{ color: "#7052d7", fontWeight: 700 }}>âš¡ Launch AI Reader â†’</small>
+                  <small style={{ color: "#7052d7", fontWeight: 700 }}>⚡ Launch AI Reader →</small>
                   <small style={{ color: "var(--muted)", fontSize: 11 }}>{sample.category}</small>
                 </div>
               </div>
@@ -2003,7 +6354,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
         </div>
       )}
 
-      {/* â”€â”€ AI Employee Verification & Editing Workspace â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ── AI Employee Verification & Editing Workspace ────────────── */}
       {currentResult && !isProcessing && (
         <div className="ocr-results-workspace" style={{ animation: "fadeIn 0.3s ease" }}>
           {/* Top action strip */}
@@ -2035,7 +6386,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                   gap: 6
                 }}
               >
-                â† Back to Documents
+                ← Back to Documents
               </button>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -2062,7 +6413,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                   </span>
                 </div>
                 <small style={{ color: "var(--muted)", fontSize: 13 }}>
-                  Parsed for <b>{currentResult.customerCompany}</b> ({currentResult.customerName}) Â· Ref: {currentResult.referenceNumber} Â· Date: {currentResult.documentDate}
+                  Parsed for <b>{currentResult.customerCompany}</b> ({currentResult.customerName}) · Ref: {currentResult.referenceNumber} · Date: {currentResult.documentDate}
                 </small>
               </div>
             </div>
@@ -2086,7 +6437,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                   transition: "all 0.2s"
                 }}
               >
-                {synced ? "âœ“ Synced to CRM & Inventory" : "ðŸ“¦ Verify & Sync to CRM"}
+                {synced ? "✓ Synced to CRM & Inventory" : "📦 Verify & Sync to CRM"}
               </button>
               <button
                 onClick={handleExportJson}
@@ -2100,7 +6451,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                   cursor: "pointer"
                 }}
               >
-                ðŸ“¥ Export JSON
+                📥 Export JSON
               </button>
               <button
                 onClick={() => onConvertToQuote(editableItems, currentResult.customerCompany, currentResult.filename)}
@@ -2118,7 +6469,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                   gap: 8
                 }}
               >
-                ðŸš€ Convert to Quotation â†’
+                🚀 Convert to Quotation →
               </button>
             </div>
           </div>
@@ -2141,7 +6492,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                     cursor: "pointer"
                   }}
                 >
-                  ðŸ“Š AI Employee Summary
+                  📊 AI Employee Summary
                 </button>
                 <button
                   onClick={() => setActiveTab("raw_ocr")}
@@ -2156,7 +6507,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                     cursor: "pointer"
                   }}
                 >
-                  âš¡ Live Raw OCR Text ({currentResult.rawOcrText.split("\n").length} lines)
+                  ⚡ Live Raw OCR Text ({currentResult.rawOcrText.split("\n").length} lines)
                 </button>
               </div>
 
@@ -2171,7 +6522,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                       marginBottom: 20
                     }}>
                       <h4 style={{ margin: "0 0 8px 0", color: "#7052d7", fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
-                        <span>ðŸ¤–</span> Operon AI Analysis Notes
+                        <span>🤖</span> Operon AI Analysis Notes
                       </h4>
                       <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, color: "var(--text)" }}>
                         {currentResult.aiNotes}
@@ -2202,16 +6553,16 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                       <h5 style={{ margin: "0 0 10px 0", fontSize: 13, color: "var(--muted)", textTransform: "uppercase" }}>AI Verification Pipeline</h5>
                       <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 12 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ color: "#16a34a" }}>âœ“</span> Optical Character Recognition (Tesseract / PDF) â€” 100%
+                          <span style={{ color: "#16a34a" }}>✓</span> Optical Character Recognition (Tesseract / PDF) — 100%
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ color: "#16a34a" }}>âœ“</span> Named Entity Recognition (Client &amp; Dates) â€” Verified
+                          <span style={{ color: "#16a34a" }}>✓</span> Named Entity Recognition (Client &amp; Dates) — Verified
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ color: "#16a34a" }}>âœ“</span> Semantic Catalog Matching &amp; Alias Translation â€” {editableItems.length} items
+                          <span style={{ color: "#16a34a" }}>✓</span> Semantic Catalog Matching &amp; Alias Translation — {editableItems.length} items
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ color: "#16a34a" }}>âœ“</span> GST Tax &amp; Pricing Rule Validation â€” Compliant
+                          <span style={{ color: "#16a34a" }}>✓</span> GST Tax &amp; Pricing Rule Validation — Compliant
                         </div>
                       </div>
                     </div>
@@ -2290,7 +6641,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                       <th style={{ padding: "12px 14px" }}>Product &amp; AI Match Reason</th>
                       <th style={{ padding: "12px 10px", width: 140 }}>Catalog SKU Link</th>
                       <th style={{ padding: "12px 10px", width: 70 }}>Qty</th>
-                      <th style={{ padding: "12px 10px", width: 90 }}>Rate (â‚¹)</th>
+                      <th style={{ padding: "12px 10px", width: 90 }}>Rate (₹)</th>
                       <th style={{ padding: "12px 10px", width: 60 }}>GST</th>
                       <th style={{ padding: "12px 14px", textAlign: "right", width: 100 }}>Total</th>
                       <th style={{ padding: "12px 8px", width: 40 }}></th>
@@ -2382,7 +6733,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                             {item.gst}%
                           </td>
                           <td style={{ padding: "14px", textAlign: "right", fontWeight: 800 }}>
-                            â‚¹ {Math.round(itemTotal).toLocaleString("en-IN")}
+                            ₹ {Math.round(itemTotal).toLocaleString("en-IN")}
                           </td>
                           <td style={{ padding: "10px", textAlign: "center" }}>
                             <button
@@ -2397,7 +6748,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
                               }}
                               title="Remove item"
                             >
-                              âœ•
+                              ✕
                             </button>
                           </td>
                         </tr>
@@ -2426,15 +6777,15 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
               }}>
                 <div>
                   <span style={{ fontSize: 12, color: "var(--muted)", display: "block" }}>Subtotal (Excl. Tax)</span>
-                  <strong style={{ fontSize: 16 }}>â‚¹ {subtotal.toLocaleString("en-IN")}</strong>
+                  <strong style={{ fontSize: 16 }}>₹ {subtotal.toLocaleString("en-IN")}</strong>
                 </div>
                 <div>
                   <span style={{ fontSize: 12, color: "var(--muted)", display: "block" }}>Estimated GST Tax</span>
-                  <strong style={{ fontSize: 16 }}>â‚¹ {Math.round(totalGst).toLocaleString("en-IN")}</strong>
+                  <strong style={{ fontSize: 16 }}>₹ {Math.round(totalGst).toLocaleString("en-IN")}</strong>
                 </div>
                 <div style={{ borderLeft: "1px solid var(--line)", paddingLeft: 24 }}>
                   <span style={{ fontSize: 12, color: "#7052d7", fontWeight: 700, display: "block" }}>Total Quoted Value</span>
-                  <strong style={{ fontSize: 22, color: "#7052d7", fontWeight: 900 }}>â‚¹ {Math.round(totalAmount).toLocaleString("en-IN")}</strong>
+                  <strong style={{ fontSize: 22, color: "#7052d7", fontWeight: 900 }}>₹ {Math.round(totalAmount).toLocaleString("en-IN")}</strong>
                 </div>
               </div>
             </div>
@@ -2444,12 +6795,11 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\products\ProductsView.tsx
 
-`	ypescript
+```tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -2524,7 +6874,7 @@ export function ProductsView() {
   const handleCreateProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim() || !formRate) {
-      showNotify('âš ï¸ Please enter at least Product Name and Rate (â‚¹)');
+      showNotify('⚠️ Please enter at least Product Name and Rate (₹)');
       return;
     }
 
@@ -2540,7 +6890,7 @@ export function ProductsView() {
         stock: Number(formStock) || 0,
         warranty: formWarranty || '1 Year Standard',
       });
-      showNotify(`âœï¸ Successfully updated "${formName}" in Company Catalog!`);
+      showNotify(`✏️ Successfully updated "${formName}" in Company Catalog!`);
     } else {
       const newProd = addCompanyProduct({
         name: formName,
@@ -2553,7 +6903,7 @@ export function ProductsView() {
         stock: Number(formStock) || 20,
         warranty: formWarranty || '1 Year Standard',
       });
-      showNotify(`âœ… Successfully added "${newProd.name}" (${newProd.sku}) to Company Products!`);
+      showNotify(`✅ Successfully added "${newProd.name}" (${newProd.sku}) to Company Products!`);
     }
 
     setShowAddModal(false);
@@ -2571,7 +6921,7 @@ export function ProductsView() {
     e.stopPropagation();
     if (confirm(`Are you sure you want to remove "${name}" from Company Products?`)) {
       deleteCompanyProduct(id);
-      showNotify(`ðŸ—‘ï¸ Removed "${name}" from catalog.`);
+      showNotify(`🗑️ Removed "${name}" from catalog.`);
       loadProducts();
     }
   };
@@ -2602,7 +6952,7 @@ export function ProductsView() {
         <div className="bg-gradient-to-r from-indigo-900/90 to-purple-900/90 text-white p-4 rounded-xl shadow-md border border-indigo-700/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center text-xl shrink-0">
-              âš¡
+              ⚡
             </div>
             <div>
               <h4 className="font-bold text-sm">Operon AI Inventory Officer Active</h4>
@@ -2623,7 +6973,7 @@ export function ProductsView() {
           </div>
           <div className="flex gap-3 w-full sm:w-auto">
             <div className="relative flex-1 sm:flex-initial">
-              <span className="absolute inset-y-0 left-3 flex items-center text-zinc-400">ðŸ”</span>
+              <span className="absolute inset-y-0 left-3 flex items-center text-zinc-400">🔍</span>
               <input 
                 type="text" 
                 placeholder="Search products, SKU, brand..." 
@@ -2659,7 +7009,7 @@ export function ProductsView() {
       <div className="p-6 overflow-y-auto flex-1">
         {filteredProducts.length === 0 ? (
           <div className="text-center py-20 bg-white dark:bg-zinc-800/50 rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700">
-            <div className="text-4xl mb-3">ðŸ“¦</div>
+            <div className="text-4xl mb-3">📦</div>
             <h3 className="text-base font-semibold text-zinc-700 dark:text-zinc-300">No products found</h3>
             <p className="text-xs text-zinc-500 max-w-sm mx-auto mt-1 mb-6">
               We couldn&apos;t find any items matching your filter. Try clearing the search or click below to add a new product.
@@ -2687,14 +7037,14 @@ export function ProductsView() {
                       title="Edit Product Details"
                       className="w-7 h-7 bg-indigo-500/10 hover:bg-indigo-600 text-indigo-600 dark:text-indigo-400 hover:text-white rounded-full flex items-center justify-center text-xs transition-all shadow-sm"
                     >
-                      âœï¸
+                      ✏️
                     </button>
                     <button
                       onClick={(e) => handleDelete(product.id, product.name, e)}
                       title="Remove from Company Catalog"
                       className="w-7 h-7 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-full flex items-center justify-center text-xs transition-all shadow-sm"
                     >
-                      ðŸ—‘ï¸
+                      🗑️
                     </button>
                   </div>
 
@@ -2706,11 +7056,11 @@ export function ProductsView() {
                     )}
                     {isAutoLearned && (
                       <span className="absolute bottom-2 right-2 bg-indigo-600/90 text-white text-[9px] font-bold px-2 py-0.5 rounded-full shadow">
-                        âš¡ Auto-Learned
+                        ⚡ Auto-Learned
                       </span>
                     )}
                     <span className="text-4xl text-zinc-300 dark:text-zinc-700 group-hover:scale-110 transition-transform">
-                      {product.image || 'ðŸ¥'}
+                      {product.image || '🏥'}
                     </span>
                   </div>
                   
@@ -2718,7 +7068,7 @@ export function ProductsView() {
                     <div className="flex justify-between items-start mb-2 gap-2">
                       <h3 className="font-semibold text-sm text-zinc-900 dark:text-white line-clamp-2 leading-snug">{product.name}</h3>
                       <div className="text-right shrink-0">
-                        <div className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">â‚¹{product.rate.toLocaleString('en-IN')}</div>
+                        <div className="font-bold text-indigo-600 dark:text-indigo-400 text-sm">₹{product.rate.toLocaleString('en-IN')}</div>
                         <div className="text-[10px] text-zinc-500">+{product.gst || 18}% GST</div>
                       </div>
                     </div>
@@ -2763,7 +7113,7 @@ export function ProductsView() {
             <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-800/50">
               <div>
                 <h3 className="text-lg font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                  <span>ðŸ¥</span> {editingId ? 'Edit Company Product' : 'Add Company Product'}
+                  <span>🏥</span> {editingId ? 'Edit Company Product' : 'Add Company Product'}
                 </h3>
                 <p className="text-xs text-zinc-500">
                   {editingId ? 'Modify equipment specifications and pricing.' : 'Manually add a new equipment item to your Operon AI catalog.'}
@@ -2773,7 +7123,7 @@ export function ProductsView() {
                 onClick={() => { setShowAddModal(false); setEditingId(null); }}
                 className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:bg-zinc-300"
               >
-                âœ•
+                ✕
               </button>
             </div>
 
@@ -2795,7 +7145,7 @@ export function ProductsView() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1">
-                    Rate / Unit Price (â‚¹) *
+                    Rate / Unit Price (₹) *
                   </label>
                   <input 
                     type="number" 
@@ -2932,12 +7282,11 @@ export function ProductsView() {
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\quotation\ApprovalWorkflow.tsx
 
-`	ypescript
+```tsx
 /* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 
@@ -2973,7 +7322,7 @@ export function ApprovalWorkflow({ currentStatus, onAdvance }: ApprovalWorkflowP
                       isCurrent ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 ring-4 ring-purple-100 dark:ring-purple-900/20' : 
                       'bg-zinc-100 dark:bg-zinc-800 text-zinc-400'}`}
                 >
-                  {isDone ? 'âœ“' : index + 1}
+                  {isDone ? '✓' : index + 1}
                 </div>
                 <div className={`mt-3 text-xs font-semibold text-center transition-colors
                   ${isDone ? 'text-zinc-900 dark:text-white' : 
@@ -3011,12 +7360,11 @@ export function ApprovalWorkflow({ currentStatus, onAdvance }: ApprovalWorkflowP
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\quotation\ExportDesignModal.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React, { useState } from "react";
@@ -3080,7 +7428,7 @@ export function ExportDesignModal({
               date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
             });
           } else {
-            await downloadQuotationExcel({
+            const res = await downloadQuotationExcel({
               brand: exportBrand,
               company: company,
               items: quote.items || [],
@@ -3092,12 +7440,13 @@ export function ExportDesignModal({
               clientDetails: quote.clientDetails,
               date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
             });
+            res?.warnings?.forEach((w) => notify(w));
           }
         }
 
         setIsExporting(false);
         notify(
-          `ðŸŽ‰ Successfully exported ${selectedQuotes.length} quotation(s) in ${format.toUpperCase()} format using "${
+          `🎉 Successfully exported ${selectedQuotes.length} quotation(s) in ${format.toUpperCase()} format using "${
             selectedStyle === "custom_uploaded"
               ? "Custom Uploaded Design"
               : selectedStyle?.toUpperCase()
@@ -3107,7 +7456,7 @@ export function ExportDesignModal({
       } catch (err: any) {
         setIsExporting(false);
         console.error("Export failed:", err);
-        notify(`âš ï¸ Export failed: ${err.message || "Please check quotation data"}`);
+        notify(`⚠️ Export failed: ${err.message || "Please check quotation data"}`);
       }
     }, 400);
   };
@@ -3118,22 +7467,22 @@ export function ExportDesignModal({
 
   return (
     <ToolModal
-      title="ðŸŽ¨ Finalize & Export Quotation(s)"
+      title="🎨 Finalize & Export Quotation(s)"
       subtitle="Choose your layout design and export format for the selected quotes."
       onClose={onClose}
     >
       <div className="space-y-6 max-h-[75vh] overflow-y-auto pr-1">
-        {/* â”€â”€ Section 1: Selected Quotations Summary â”€â”€ */}
+        {/* ── Section 1: Selected Quotations Summary ── */}
         <div className="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900 rounded-2xl p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <span className="text-xl">ðŸ“‘</span>
+              <span className="text-xl">📑</span>
               <h4 className="font-bold text-sm text-indigo-950 dark:text-indigo-200">
                 Selected for Export ({selectedQuotes.length} {selectedQuotes.length === 1 ? "Quotation" : "Quotations"})
               </h4>
             </div>
             <span className="text-xs font-extrabold bg-indigo-600 text-white px-3 py-1 rounded-full">
-              Total: â‚¹{totalValue.toLocaleString("en-IN")}
+              Total: ₹{totalValue.toLocaleString("en-IN")}
             </span>
           </div>
 
@@ -3154,7 +7503,7 @@ export function ExportDesignModal({
                 <div className="flex items-center gap-3">
                   <span className="text-zinc-500">{q.items.length} items</span>
                   <span className="font-bold text-zinc-900 dark:text-white">
-                    â‚¹{q.total.toLocaleString("en-IN")}
+                    ₹{q.total.toLocaleString("en-IN")}
                   </span>
                 </div>
               </div>
@@ -3162,7 +7511,7 @@ export function ExportDesignModal({
           </div>
         </div>
 
-        {/* â”€â”€ Section 2: Choose Design Layout ("Which Design?") â”€â”€ */}
+        {/* ── Section 2: Choose Design Layout ("Which Design?") ── */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <div>
@@ -3181,7 +7530,7 @@ export function ExportDesignModal({
               }}
               className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800"
             >
-              <span>âš™ï¸</span> Upload / Manage Custom Templates â†’
+              <span>⚙️</span> Upload / Manage Custom Templates →
             </button>
           </div>
 
@@ -3197,7 +7546,7 @@ export function ExportDesignModal({
             >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xl">âš¡</span>
+                  <span className="text-xl">⚡</span>
                   {selectedStyle === "modern" && (
                     <span className="text-[10px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
                       Selected
@@ -3224,7 +7573,7 @@ export function ExportDesignModal({
             >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xl">ðŸ›ï¸</span>
+                  <span className="text-xl">🏛️</span>
                   {selectedStyle === "classic" && (
                     <span className="text-[10px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
                       Selected
@@ -3251,7 +7600,7 @@ export function ExportDesignModal({
             >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xl">ðŸ’Ž</span>
+                  <span className="text-xl">💎</span>
                   {selectedStyle === "minimal" && (
                     <span className="text-[10px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
                       Selected
@@ -3278,7 +7627,7 @@ export function ExportDesignModal({
             >
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xl">ðŸ–¼ï¸</span>
+                  <span className="text-xl">🖼️</span>
                   {selectedStyle === "custom_uploaded" && (
                     <span className="text-[10px] font-extrabold bg-green-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
                       Selected
@@ -3297,14 +7646,14 @@ export function ExportDesignModal({
                   {hasCustomUploads ? (
                     <div className="space-y-1 text-green-700 dark:text-green-400 font-semibold">
                       {brand.customExcelTemplate && (
-                        <div>âœ“ Excel Template: {brand.customExcelTemplateName || "Uploaded"}</div>
+                        <div>✓ Excel Template: {brand.customExcelTemplateName || "Uploaded"}</div>
                       )}
-                      {brand.customHeaderImage && <div>âœ“ Custom Header Banner Uploaded</div>}
-                      {brand.customFooterImage && <div>âœ“ Custom Footer / Stamp Uploaded</div>}
+                      {brand.customHeaderImage && <div>✓ Custom Header Banner Uploaded</div>}
+                      {brand.customFooterImage && <div>✓ Custom Footer / Stamp Uploaded</div>}
                     </div>
                   ) : (
                     <div className="text-amber-600 dark:text-amber-400 font-medium">
-                      âš ï¸ No custom template uploaded yet. Click &apos;Upload / Manage Custom Templates&apos; above!
+                      ⚠️ No custom template uploaded yet. Click &apos;Upload / Manage Custom Templates&apos; above!
                     </div>
                   )}
                 </div>
@@ -3313,7 +7662,7 @@ export function ExportDesignModal({
           </div>
         </div>
 
-        {/* â”€â”€ Section 3: Action Buttons â”€â”€ */}
+        {/* ── Section 3: Action Buttons ── */}
         <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row gap-3 justify-end">
           <button
             type="button"
@@ -3329,7 +7678,7 @@ export function ExportDesignModal({
             onClick={() => handleExport("pdf")}
             className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-extrabold shadow-lg shadow-red-500/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 disabled:opacity-50"
           >
-            <span>ðŸ“„</span>
+            <span>📄</span>
             <span>{isExporting ? "Generating..." : `Download as PDF (${selectedQuotes.length})`}</span>
           </button>
 
@@ -3339,7 +7688,7 @@ export function ExportDesignModal({
             onClick={() => handleExport("excel")}
             className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white text-xs font-extrabold shadow-lg shadow-green-500/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 disabled:opacity-50"
           >
-            <span>ðŸ“Š</span>
+            <span>📊</span>
             <span>{isExporting ? "Generating..." : `Download as Excel (${selectedQuotes.length})`}</span>
           </button>
         </div>
@@ -3347,12 +7696,11 @@ export function ExportDesignModal({
     </ToolModal>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\quotation\QuotationsView.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -3393,7 +7741,7 @@ export function QuotationsView({ onOpenDesign, onNewQuote }: QuotationsViewProps
     if (confirm(`Are you sure you want to delete quotation ${id}?`)) {
       deleteQuotation(id);
       setSelectedIds((prev) => prev.filter((item) => item !== id));
-      notify(`ðŸ—‘ï¸ Deleted quotation ${id}`);
+      notify(`🗑️ Deleted quotation ${id}`);
     }
   };
 
@@ -3449,14 +7797,14 @@ export function QuotationsView({ onOpenDesign, onNewQuote }: QuotationsViewProps
               onClick={handleExportSelected}
               className="bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white px-4 py-2 rounded-xl font-extrabold text-xs transition-all flex items-center gap-2 shadow-md transform hover:-translate-y-0.5 animate-pulse"
             >
-              <span>ðŸ“¤</span> Export Selected ({selectedIds.length}) â†’
+              <span>📤</span> Export Selected ({selectedIds.length}) →
             </button>
           )}
           <button
             onClick={onOpenDesign}
             className="bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-sm"
           >
-            <span>ðŸŽ¨</span> Upload Design Template
+            <span>🎨</span> Upload Design Template
           </button>
           <button
             onClick={onNewQuote}
@@ -3578,21 +7926,21 @@ export function QuotationsView({ onOpenDesign, onNewQuote }: QuotationsViewProps
                 title="Choose Design & Download PDF"
                 className="px-2.5 py-1 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 font-bold text-xs rounded-lg border border-red-200 dark:border-red-800 transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
               >
-                <span>ðŸ“„</span> PDF
+                <span>📄</span> PDF
               </button>
               <button
                 onClick={(e) => handleOpenExportModal(quote, e)}
                 title="Choose Design & Download Excel"
                 className="px-2.5 py-1 bg-green-50 dark:bg-green-950/40 hover:bg-green-100 dark:hover:bg-green-900 text-green-600 dark:text-green-400 font-bold text-xs rounded-lg border border-green-200 dark:border-green-800 transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
               >
-                <span>ðŸ“Š</span> Excel
+                <span>📊</span> Excel
               </button>
               <button
                 onClick={(e) => handleDelete(quote.id, e)}
                 title="Delete Quotation"
                 className="px-2.5 py-1 bg-zinc-100 dark:bg-zinc-800 hover:bg-red-100 dark:hover:bg-red-950 text-zinc-600 dark:text-zinc-400 hover:text-red-600 dark:hover:text-red-400 font-bold text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 hover:border-red-300 transition-all flex items-center justify-center cursor-pointer shadow-2xs"
               >
-                <span>ðŸ—‘ï¸</span> Delete
+                <span>🗑️</span> Delete
               </button>
             </div>
           </div>
@@ -3622,12 +7970,11 @@ export function QuotationsView({ onOpenDesign, onNewQuote }: QuotationsViewProps
   );
 }
 
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\quotation\VersionHistory.tsx
 
-`	ypescript
+```tsx
 'use client';
 
 import React from 'react';
@@ -3685,7 +8032,7 @@ export function VersionHistory({ versions, quotationId }: VersionHistoryProps) {
                         <div className="change-old text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10 px-2 py-1 rounded line-through flex-1">
                           {change.oldValue}
                         </div>
-                        <span className="text-zinc-400 hidden sm:inline">â†’</span>
+                        <span className="text-zinc-400 hidden sm:inline">→</span>
                         <div className="change-new text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/10 px-2 py-1 rounded flex-1">
                           {change.newValue}
                         </div>
@@ -3703,12 +8050,11 @@ export function VersionHistory({ versions, quotationId }: VersionHistoryProps) {
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\search\CommandPalette.tsx
 
-`	ypescript
+```tsx
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
 
@@ -3728,12 +8074,11 @@ const QUICK_ACTIONS: {
   view?: ActiveView;
   type: "action" | "nav";
 }[] = [
-  { type: "action", title: "New Quotation", icon: "âœ¦" },
-  { type: "nav", title: "Go to Customers", icon: "â™™", view: "Customers" },
-  { type: "nav", title: "Go to Products", icon: "â—ˆ", view: "Products" },
-  { type: "nav", title: "Go to Quotations", icon: "â–£", view: "Quotations" },
-  { type: "nav", title: "Go to Analytics", icon: "âŒ", view: "Analytics" },
-  { type: "nav", title: "Go to Follow-ups", icon: "â—·", view: "Follow-ups" },
+  { type: "action", title: "New Quotation", icon: "✦" },
+  { type: "nav", title: "Go to Products", icon: "◈", view: "Products" },
+  { type: "nav", title: "Go to Quotations", icon: "▣", view: "Quotations" },
+  { type: "nav", title: "Go to Analytics", icon: "⌁", view: "Analytics" },
+  { type: "nav", title: "Go to Follow-ups", icon: "◷", view: "Follow-ups" },
 ];
 
 export function CommandPalette({ onClose, onNavigate }: CommandPaletteProps) {
@@ -3761,12 +8106,12 @@ export function CommandPalette({ onClose, onNavigate }: CommandPaletteProps) {
     ? results.map((r) => ({
         title: r.title,
         subtitle: r.subtitle,
-        icon: r.type === "customer" ? "â™™" : r.type === "product" ? "â—ˆ" : "â–£",
-        view: (r.type === "customer"
-          ? "Customers"
-          : r.type === "product"
-          ? "Products"
-          : "Quotations") as ActiveView,
+        icon: r.type === "customer" ? "♙" : r.type === "product" ? "◈" : "▣",
+        view: (
+          r.type === "product"
+            ? "Products"
+            : "Quotations"
+        ) as ActiveView,
       }))
     : QUICK_ACTIONS.map((a) => ({
         title: a.title,
@@ -3809,10 +8154,10 @@ export function CommandPalette({ onClose, onNavigate }: CommandPaletteProps) {
       >
         {/* Search Input */}
         <div className="command-input">
-          <span>âŒ•</span>
+          <span>⌕</span>
           <input
             ref={inputRef}
-            placeholder="Search customers, products, quotationsâ€¦"
+            placeholder="Search customers, products, quotations…"
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -3851,7 +8196,7 @@ export function CommandPalette({ onClose, onNavigate }: CommandPaletteProps) {
                   <span className="command-shortcut">{item.subtitle}</span>
                 )}
                 {activeIndex === idx && (
-                  <span className="command-shortcut">â†µ</span>
+                  <span className="command-shortcut">↵</span>
                 )}
               </div>
             ))}
@@ -3870,11 +8215,11 @@ export function CommandPalette({ onClose, onNavigate }: CommandPaletteProps) {
           }}
         >
           <span>
-            <kbd style={{ padding: "2px 5px", border: "1px solid var(--line)", borderRadius: "4px", marginRight: "3px", background: "var(--soft)" }}>â†‘</kbd>
-            <kbd style={{ padding: "2px 5px", border: "1px solid var(--line)", borderRadius: "4px", marginRight: "6px", background: "var(--soft)" }}>â†“</kbd>
+            <kbd style={{ padding: "2px 5px", border: "1px solid var(--line)", borderRadius: "4px", marginRight: "3px", background: "var(--soft)" }}>↑</kbd>
+            <kbd style={{ padding: "2px 5px", border: "1px solid var(--line)", borderRadius: "4px", marginRight: "6px", background: "var(--soft)" }}>↓</kbd>
             navigate
-            <span style={{ margin: "0 8px" }}>Â·</span>
-            <kbd style={{ padding: "2px 5px", border: "1px solid var(--line)", borderRadius: "4px", marginRight: "3px", background: "var(--soft)" }}>â†µ</kbd>
+            <span style={{ margin: "0 8px" }}>·</span>
+            <kbd style={{ padding: "2px 5px", border: "1px solid var(--line)", borderRadius: "4px", marginRight: "3px", background: "var(--soft)" }}>↵</kbd>
             select
           </span>
           <span>QuoteAI Command Palette</span>
@@ -3883,12 +8228,11 @@ export function CommandPalette({ onClose, onNavigate }: CommandPaletteProps) {
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\tools\DesignModal.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React, { useState } from "react";
@@ -3920,7 +8264,7 @@ export function DesignModal({
   const handleSave = () => {
     saveBrandSettings(localBrand);
     onBrandChange(localBrand);
-    notify("ðŸŽ¨ Quotation Design & Uploaded Templates saved successfully!");
+    notify("🎨 Quotation Design & Uploaded Templates saved successfully!");
     onClose();
   };
 
@@ -3928,14 +8272,14 @@ export function DesignModal({
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      notify("âš ï¸ Please upload an image smaller than 5MB");
+      notify("⚠️ Please upload an image smaller than 5MB");
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === "string") {
         setLocalBrand((prev) => ({ ...prev, [field]: reader.result }));
-        notify(`âœ… Uploaded ${field === "customHeaderImage" ? "Header Letterhead / Logo" : "Footer Stamp / Signature"}!`);
+        notify(`✅ Uploaded ${field === "customHeaderImage" ? "Header Letterhead / Logo" : "Footer Stamp / Signature"}!`);
       }
     };
     reader.readAsDataURL(file);
@@ -3943,14 +8287,14 @@ export function DesignModal({
 
   const removeImage = (field: "customHeaderImage" | "customFooterImage") => {
     setLocalBrand((prev) => ({ ...prev, [field]: undefined }));
-    notify(`ðŸ—‘ï¸ Removed uploaded ${field === "customHeaderImage" ? "header" : "footer"}.`);
+    notify(`🗑️ Removed uploaded ${field === "customHeaderImage" ? "header" : "footer"}.`);
   };
 
   const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
-      notify("âš ï¸ Please upload an Excel file smaller than 10MB");
+      notify("⚠️ Please upload an Excel file smaller than 10MB");
       return;
     }
     const reader = new FileReader();
@@ -3965,7 +8309,7 @@ export function DesignModal({
             customExcelTemplateName: file.name,
             customExcelMapping: mapping,
           }));
-          notify(`ðŸ“Š Analyzed template "${file.name}"! Found table header at row ${mapping.headerRowIndex}.`);
+          notify(`📊 Analyzed template "${file.name}"! Found table header at row ${mapping.headerRowIndex}.`);
         } catch (err: any) {
           console.error("Failed to analyze Excel template:", err);
           setLocalBrand((prev) => ({
@@ -3973,7 +8317,7 @@ export function DesignModal({
             customExcelTemplate: base64Str,
             customExcelTemplateName: file.name,
           }));
-          notify(`âš ï¸ Uploaded template, but analysis had a warning: ${err.message || "Unknown structure"}`);
+          notify(`⚠️ Uploaded template, but analysis had a warning: ${err.message || "Unknown structure"}`);
         }
       }
     };
@@ -3987,7 +8331,7 @@ export function DesignModal({
       customExcelTemplateName: undefined,
       customExcelMapping: undefined,
     }));
-    notify("ðŸ—‘ï¸ Removed uploaded Excel template and structure mapping.");
+    notify("🗑️ Removed uploaded Excel template and structure mapping.");
   };
 
   const templateStyles = [
@@ -3995,25 +8339,25 @@ export function DesignModal({
       id: "modern",
       name: "Modern Clean",
       desc: "Vibrant accent header bar with sleek modern typography.",
-      icon: "âš¡",
+      icon: "⚡",
     },
     {
       id: "classic",
       name: "Classic Enterprise",
       desc: "Formal boxed layout with shaded alternating table rows.",
-      icon: "ðŸ›ï¸",
+      icon: "🏛️",
     },
     {
       id: "minimal",
       name: "Minimal Pro",
       desc: "Clean whitespace, bold titles, and subtle divider lines.",
-      icon: "ðŸ’Ž",
+      icon: "💎",
     },
     {
       id: "custom_uploaded",
       name: "Custom Uploaded Design",
       desc: "Use your uploaded letterhead banner, footer, and watermark.",
-      icon: "ðŸ–¼ï¸",
+      icon: "🖼️",
     },
   ] as const;
 
@@ -4039,7 +8383,7 @@ export function DesignModal({
                   : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
               }`}
             >
-              ðŸ›ï¸ Templates
+              🏛️ Templates
             </button>
             <button
               type="button"
@@ -4050,7 +8394,7 @@ export function DesignModal({
                   : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
               }`}
             >
-              ðŸ–¼ï¸ Upload Design
+              🖼️ Upload Design
             </button>
             <button
               type="button"
@@ -4061,7 +8405,7 @@ export function DesignModal({
                   : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900"
               }`}
             >
-              âš™ï¸ Brand & Terms
+              ⚙️ Brand & Terms
             </button>
           </div>
 
@@ -4104,7 +8448,7 @@ export function DesignModal({
           {activeTab === "upload" && (
             <div className="space-y-5">
               <div className="p-3.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900 rounded-xl text-xs text-indigo-800 dark:text-indigo-300 leading-relaxed">
-                ðŸ’¡ <strong>Pro Tip:</strong> Upload your company letterhead (header banner) and official stamp/signature image. When you build quotes, Operon AI will embed your exact custom branding into the downloaded PDFs!
+                💡 <strong>Pro Tip:</strong> Upload your company letterhead (header banner) and official stamp/signature image. When you build quotes, Operon AI will embed your exact custom branding into the downloaded PDFs!
               </div>
 
               {/* Header Uploader */}
@@ -4119,7 +8463,7 @@ export function DesignModal({
                       onClick={() => removeImage("customHeaderImage")}
                       className="text-[11px] text-red-500 hover:underline font-semibold"
                     >
-                      âœ• Remove
+                      ✕ Remove
                     </button>
                   )}
                 </div>
@@ -4132,11 +8476,11 @@ export function DesignModal({
                       alt="Uploaded Header Preview"
                       className="max-h-24 w-full object-contain mx-auto rounded"
                     />
-                    <div className="text-[10px] text-center text-zinc-400 mt-1">âœ“ Custom Header Uploaded</div>
+                    <div className="text-[10px] text-center text-zinc-400 mt-1">✓ Custom Header Uploaded</div>
                   </div>
                 ) : (
                   <label className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-indigo-500 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer bg-zinc-50 dark:bg-zinc-800/40 transition-colors">
-                    <span className="text-2xl mb-1">ðŸ“¤</span>
+                    <span className="text-2xl mb-1">📤</span>
                     <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                       Click to upload header / letterhead banner
                     </span>
@@ -4163,7 +8507,7 @@ export function DesignModal({
                       onClick={() => removeImage("customFooterImage")}
                       className="text-[11px] text-red-500 hover:underline font-semibold"
                     >
-                      âœ• Remove
+                      ✕ Remove
                     </button>
                   )}
                 </div>
@@ -4176,11 +8520,11 @@ export function DesignModal({
                       alt="Uploaded Footer Preview"
                       className="max-h-20 w-full object-contain mx-auto rounded"
                     />
-                    <div className="text-[10px] text-center text-zinc-400 mt-1">âœ“ Custom Footer Stamp Uploaded</div>
+                    <div className="text-[10px] text-center text-zinc-400 mt-1">✓ Custom Footer Stamp Uploaded</div>
                   </div>
                 ) : (
                   <label className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-indigo-500 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer bg-zinc-50 dark:bg-zinc-800/40 transition-colors">
-                    <span className="text-2xl mb-1">âœï¸</span>
+                    <span className="text-2xl mb-1">✍️</span>
                     <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                       Click to upload footer or stamp & sign
                     </span>
@@ -4213,7 +8557,7 @@ export function DesignModal({
               <div className="space-y-2 pt-3 border-t border-zinc-200 dark:border-zinc-800">
                 <div className="flex justify-between items-center">
                   <label className="block text-xs font-bold uppercase tracking-wider text-green-700 dark:text-green-400 flex items-center gap-1">
-                    <span>ðŸ“Š</span> Excel Proforma / Quotation Template (.xlsx / .xls)
+                    <span>📊</span> Excel Proforma / Quotation Template (.xlsx / .xls)
                   </label>
                   {localBrand.customExcelTemplate && (
                     <button
@@ -4221,7 +8565,7 @@ export function DesignModal({
                       onClick={removeExcelTemplate}
                       className="text-[11px] text-red-500 hover:underline font-semibold"
                     >
-                      âœ• Remove
+                      ✕ Remove
                     </button>
                   )}
                 </div>
@@ -4230,34 +8574,34 @@ export function DesignModal({
                   <div className="border border-green-300 dark:border-green-800 rounded-xl p-3 bg-green-50 dark:bg-green-950/30 space-y-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="text-2xl">ðŸ“‘</span>
+                        <span className="text-2xl">📑</span>
                         <div className="min-w-0">
                           <div className="font-bold text-xs text-green-900 dark:text-green-200 truncate">
                             {localBrand.customExcelTemplateName || "Custom_Quotation_Template.xlsx"}
                           </div>
                           <div className="text-[10px] text-green-700 dark:text-green-400">
-                            âœ“ Ready for automated Excel quotation generation
+                            ✓ Ready for automated Excel quotation generation
                           </div>
                         </div>
                       </div>
                     </div>
                     {localBrand.customExcelMapping && (
                       <div className="pt-2 border-t border-green-200 dark:border-green-800/60 text-[11px] text-green-800 dark:text-green-300 grid grid-cols-2 gap-1.5 bg-white/60 dark:bg-black/20 p-2.5 rounded-lg">
-                        <div>ðŸ“Œ <strong>Header Row:</strong> Row #{localBrand.customExcelMapping.headerRowIndex}</div>
-                        <div>ðŸ“¦ <strong>Product Col:</strong> Col #{localBrand.customExcelMapping.columns.product}</div>
-                        <div>ðŸ”¢ <strong>Qty Col:</strong> Col #{localBrand.customExcelMapping.columns.qty}</div>
-                        <div>ðŸ’° <strong>Rate Col:</strong> Col #{localBrand.customExcelMapping.columns.rate}</div>
-                        <div>ðŸ§® <strong>Amount Col:</strong> Col #{localBrand.customExcelMapping.columns.amount}</div>
-                        <div>ðŸ“ˆ <strong>Total Row:</strong> Row #{localBrand.customExcelMapping.totals.totalRowIndex || "Auto"}</div>
+                        <div>📌 <strong>Header Row:</strong> Row #{localBrand.customExcelMapping.headerRowIndex}</div>
+                        <div>📦 <strong>Product Col:</strong> Col #{localBrand.customExcelMapping.columns.product}</div>
+                        <div>🔢 <strong>Qty Col:</strong> Col #{localBrand.customExcelMapping.columns.qty}</div>
+                        <div>💰 <strong>Rate Col:</strong> Col #{localBrand.customExcelMapping.columns.rate}</div>
+                        <div>🧮 <strong>Amount Col:</strong> Col #{localBrand.customExcelMapping.columns.amount}</div>
+                        <div>📈 <strong>Total Row:</strong> Row #{localBrand.customExcelMapping.totals.totalRowIndex || "Auto"}</div>
                         <div className="col-span-2 text-[10px] text-green-700 dark:text-green-400 mt-1 font-semibold">
-                          âœ¨ All merged cells, colors, formulas, borders, and logos will be 100% preserved!
+                          ✨ All merged cells, colors, formulas, borders, and logos will be 100% preserved!
                         </div>
                       </div>
                     )}
                   </div>
                 ) : (
                   <label className="border-2 border-dashed border-green-300 dark:border-green-800/60 hover:border-green-500 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer bg-green-50/50 dark:bg-green-950/10 transition-colors">
-                    <span className="text-2xl mb-1">ðŸ“—</span>
+                    <span className="text-2xl mb-1">📗</span>
                     <span className="text-xs font-semibold text-green-800 dark:text-green-300">
                       Upload your company Excel quotation template
                     </span>
@@ -4336,7 +8680,7 @@ export function DesignModal({
               onClick={handleSave}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2"
             >
-              <span>âœ“</span> Save Quotation Design
+              <span>✓</span> Save Quotation Design
             </button>
           </div>
         </div>
@@ -4423,12 +8767,12 @@ export function DesignModal({
                     <tr>
                       <td className="py-1.5 font-medium">Digital Pulse Oximeter</td>
                       <td className="py-1.5 text-center">2</td>
-                      <td className="py-1.5 text-right font-semibold">â‚¹4,900</td>
+                      <td className="py-1.5 text-right font-semibold">₹4,900</td>
                     </tr>
                     <tr>
                       <td className="py-1.5 font-medium">ICU Ventilator Pro V2</td>
                       <td className="py-1.5 text-center">1</td>
-                      <td className="py-1.5 text-right font-semibold">â‚¹4,50,000</td>
+                      <td className="py-1.5 text-right font-semibold">₹4,50,000</td>
                     </tr>
                   </tbody>
                 </table>
@@ -4436,7 +8780,7 @@ export function DesignModal({
                 {/* Total */}
                 <div className="flex justify-between items-center border-t border-zinc-200 dark:border-zinc-700 pt-2 mb-4 font-bold text-xs">
                   <span>Total (incl. GST)</span>
-                  <span style={{ color: localBrand.accent || "#3b82f6" }}>â‚¹4,54,900</span>
+                  <span style={{ color: localBrand.accent || "#3b82f6" }}>₹4,54,900</span>
                 </div>
 
                 {/* Terms */}
@@ -4461,7 +8805,7 @@ export function DesignModal({
                 {localBrand.customExcelTemplate ? (
                   <div className="bg-green-100 dark:bg-green-900/50 border border-green-300 dark:border-green-700 p-2.5 rounded mb-2 text-green-900 dark:text-green-200">
                     <div className="font-bold text-[11px] flex items-center gap-1 mb-1">
-                      <span>âš¡</span> Custom Template Active
+                      <span>⚡</span> Custom Template Active
                     </div>
                     <div className="text-[9px] opacity-90 leading-tight font-sans">
                       Using uploaded file: <strong>{localBrand.customExcelTemplateName}</strong>. Operon AI will inject your line items directly into this spreadsheet when downloaded!
@@ -4484,7 +8828,7 @@ export function DesignModal({
                     <tr>
                       <td className="border p-1">OX-01</td>
                       <td className="border p-1">Pulse Oximeter</td>
-                      <td className="border p-1 text-right">â‚¹2450</td>
+                      <td className="border p-1 text-right">₹2450</td>
                     </tr>
                   </tbody>
                 </table>
@@ -4497,12 +8841,11 @@ export function DesignModal({
     </ToolModal>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\tools\ScanModal.tsx
 
-`	ypescript
+```tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -4571,7 +8914,7 @@ export function ScanModal({ onClose, onComplete, notify }: ScanModalProps) {
               setExtractedItems([]);
             }}
           />
-          <span>ðŸ“„</span>
+          <span>📄</span>
           <b>Click to upload or drag and drop</b>
           <small>PDF, JPG, PNG, XLSX, CSV (Max 10MB)</small>
           <button 
@@ -4586,7 +8929,7 @@ export function ScanModal({ onClose, onComplete, notify }: ScanModalProps) {
         {file && (
           <div className="file-chip">
             <b>{file.name}</b>
-            <button onClick={() => setFile(null)}>âœ•</button>
+            <button onClick={() => setFile(null)}>✕</button>
           </div>
         )}
 
@@ -4611,7 +8954,7 @@ export function ScanModal({ onClose, onComplete, notify }: ScanModalProps) {
 
         {isComplete && (
           <div className="scan-result">
-            <span>âœ“</span>
+            <span>✓</span>
             <div>
               <b>{errorMsg ? "Scan Failed" : "Scan complete!"}</b>
               <small className={errorMsg ? "text-red-500" : ""}>
@@ -4623,7 +8966,7 @@ export function ScanModal({ onClose, onComplete, notify }: ScanModalProps) {
               </small>
             </div>
             {extractedItems.length > 0 ? (
-              <button onClick={() => onComplete(extractedItems)}>PROCEED â†’</button>
+              <button onClick={() => onComplete(extractedItems)}>PROCEED →</button>
             ) : (
               <button onClick={onClose}>CLOSE</button>
             )}
@@ -4633,12 +8976,11 @@ export function ScanModal({ onClose, onComplete, notify }: ScanModalProps) {
     </ToolModal>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\tools\SettingsModal.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React, { useState } from "react";
@@ -4668,7 +9010,7 @@ export function SettingsModal({
   const handleSave = () => {
     onCompanyChange(localCompany);
     onBrandChange(localBrand);
-    notify("âœ… Company settings and terms saved successfully!");
+    notify("✅ Company settings and terms saved successfully!");
     onClose();
   };
 
@@ -4682,7 +9024,7 @@ export function SettingsModal({
         {/* Business Details */}
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-800 pb-2">
-            ðŸ¢ Business Details
+            🏢 Business Details
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -4734,12 +9076,26 @@ export function SettingsModal({
               />
             </div>
           </div>
+
+          {/* About Your Business */}
+          <div>
+            <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+              About Your Business
+              <span className="ml-2 font-normal text-zinc-400 dark:text-zinc-500">(used by AI Marketing)</span>
+            </label>
+            <textarea
+              className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white h-20"
+              placeholder="e.g. We supply medical diagnostic equipment to hospitals and clinics across Mumbai, known for fast delivery and competitive pricing on BP monitors, oximeters, and ECG machines."
+              value={localCompany.businessDescription || ""}
+              onChange={(e) => setLocalCompany({ ...localCompany, businessDescription: e.target.value })}
+            />
+          </div>
         </div>
 
         {/* Financials / Bank */}
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-800 pb-2">
-            ðŸ¦ Bank Account Details
+            🏦 Bank Account Details
           </h3>
           <div>
             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
@@ -4747,7 +9103,7 @@ export function SettingsModal({
             </label>
             <textarea
               className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white h-24"
-              placeholder="Bank Name: HDFC Bank&#10;Account No: 50200000000000&#10;IFSC Code: HDFC0000001"
+              placeholder={"Bank Name: HDFC Bank\nAccount No: 50200000000000\nIFSC Code: HDFC0000001"}
               value={localCompany.bankAccount}
               onChange={(e) => setLocalCompany({ ...localCompany, bankAccount: e.target.value })}
             />
@@ -4757,7 +9113,7 @@ export function SettingsModal({
         {/* Terms and Conditions */}
         <div className="space-y-4">
           <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-800 pb-2">
-            âš–ï¸ Terms & Conditions
+            ⚖️ Terms &amp; Conditions
           </h3>
           <div>
             <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
@@ -4765,7 +9121,7 @@ export function SettingsModal({
             </label>
             <textarea
               className="w-full px-3 py-2 text-sm rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white h-24"
-              placeholder="1. Delivery within 7 days.&#10;2. Warranty 1 year.&#10;3. Goods once sold will not be returned."
+              placeholder={"1. Delivery within 7 days.\n2. Warranty 1 year.\n3. Goods once sold will not be returned."}
               value={localBrand.terms}
               onChange={(e) => setLocalBrand({ ...localBrand, terms: e.target.value })}
             />
@@ -4784,12 +9140,11 @@ export function SettingsModal({
     </ToolModal>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ui\Badge.tsx
 
-`	ypescript
+```tsx
 'use client';
 
 export type BadgeVariant = 'draft' | 'sent' | 'viewed' | 'accepted' | 'rejected' | 'expired' | 'ai-review' | 'manager-review' | 'approved';
@@ -4809,12 +9164,11 @@ export function Badge({ variant, label, className = '' }: BadgeProps) {
     </span>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ui\ConfidenceBadge.tsx
 
-`	ypescript
+```tsx
 'use client';
 import { getConfidenceColor, getConfidenceLabel } from '@/lib/utils';
 
@@ -4832,12 +9186,11 @@ export function ConfidenceBadge({ confidence, showLabel, className = '' }: Confi
     </span>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ui\Modal.tsx
 
-`	ypescript
+```tsx
 'use client';
 import { useEffect } from 'react';
 
@@ -4873,19 +9226,18 @@ interface ToolModalProps {
 export function ToolModal({ title, subtitle, onClose, children }: ToolModalProps) {
   return (
     <Modal onClose={onClose} className="tool-modal">
-      <button className="close" onClick={onClose}>Ã—</button>
+      <button className="close" onClick={onClose}>×</button>
       <h2>{title}</h2>
       <p>{subtitle}</p>
       {children}
     </Modal>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ui\SkeletonLoader.tsx
 
-`	ypescript
+```tsx
 'use client';
 
 interface SkeletonLoaderProps {
@@ -4903,12 +9255,11 @@ export function SkeletonLoader({ variant, count = 1, className = '' }: SkeletonL
     </>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\ui\Toast.tsx
 
-`	ypescript
+```tsx
 'use client';
 
 interface ToastProps {
@@ -4919,16 +9270,15 @@ interface ToastProps {
 export function Toast({ message, onDismiss }: ToastProps) {
   return (
     <div className="toast" onClick={onDismiss}>
-      <span>âœ“</span>{message}
+      <span>✓</span>{message}
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\workspace\LineItem.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React from "react";
@@ -4974,7 +9324,7 @@ export function LineItem({ item, onUpdateQty, onUpdateRate, money }: LineItemPro
           onClick={() => onUpdateQty(item.id, Math.max(1, item.qty - 1))}
           className="w-7 h-7 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded flex items-center justify-center text-sm transition-colors"
         >
-          âˆ’
+          −
         </button>
         <input
           type="number"
@@ -4993,7 +9343,7 @@ export function LineItem({ item, onUpdateQty, onUpdateRate, money }: LineItemPro
       {/* Custom Rate Editor */}
       <div className="shrink-0">
         <div className="flex flex-col items-end">
-          <label className="text-[10px] text-gray-400 font-medium mb-0.5">Custom Rate (â‚¹/unit)</label>
+          <label className="text-[10px] text-gray-400 font-medium mb-0.5">Custom Rate (₹/unit)</label>
           <input
             type="number"
             value={item.rate}
@@ -5012,12 +9362,11 @@ export function LineItem({ item, onUpdateQty, onUpdateRate, money }: LineItemPro
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\workspace\QuotationBuilder.tsx
 
-`	ypescript
+```tsx
 /* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/purity */
 'use client';
 import React from 'react';
@@ -5048,7 +9397,7 @@ export function QuotationBuilder({
   items, discount, subtotal, discountValue, tax, total,
   updateQty, updateRate, incrementDiscount, decrementDiscount, onDownloadPdf, onDownloadExcel, onCreateQuote
 }: BuilderProps) {
-  const money = (v: number) => `â‚¹${v.toFixed(2)}`;
+  const money = (v: number) => `₹${v.toFixed(2)}`;
 
   return (
     <div className="builder-card bg-white rounded-lg shadow-md p-6">
@@ -5072,7 +9421,7 @@ export function QuotationBuilder({
 
       <div className="mb-6 p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900/30">
         <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <span>ðŸ‘¤</span> Client Details
+          <span>👤</span> Client Details
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
@@ -5135,18 +9484,17 @@ export function QuotationBuilder({
           onClick={onCreateQuote}
           className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold w-full sm:w-auto shadow-md transition-colors flex items-center justify-center gap-2"
         >
-          <span>âœ“</span> Approve &amp; Save Quote (+ Auto-learn items)
+          <span>✓</span> Approve &amp; Save Quote (+ Auto-learn items)
         </button>
       </div>
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\workspace\RequestCard.tsx
 
-`	ypescript
+```tsx
 /* eslint-disable @typescript-eslint/no-unused-vars */
 'use client';
 import React from 'react';
@@ -5172,28 +9520,27 @@ export function RequestCard({ request, onRequestChange, onAttach, onAnalyze }: R
       
       <div className="request-actions flex justify-between items-center">
         <button onClick={onAttach} className="text-gray-600 hover:text-gray-900 border px-3 py-1.5 rounded">
-          ðŸ“Ž Attach
+          📎 Attach
         </button>
         <button onClick={onAnalyze} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium">
-          âœ¨ Analyze request
+          ✨ Analyze request
         </button>
       </div>
 
       {request.trim().length > 0 && (
         <div className="match-box mt-4 p-3 bg-blue-50 text-blue-800 rounded-lg text-sm flex items-center gap-2">
-          <span className="text-lg">ðŸŽ¯</span>
+          <span className="text-lg">🎯</span>
           3 products matched
         </div>
       )}
     </div>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\components\workspace\WorkspaceModal.tsx
 
-`	ypescript
+```tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -5306,9 +9653,9 @@ export function WorkspaceModal({
     addQuotation(newQuote);
 
     if (learnedProducts.length > 0) {
-      notify(`ðŸŽ‰ Quote ${newId} Saved! âš¡ Operon AI learned ${learnedProducts.length} new product(s)!`);
+      notify(`🎉 Quote ${newId} Saved! ⚡ Operon AI learned ${learnedProducts.length} new product(s)!`);
     } else {
-      notify(`âœ… Quotation ${newId} finalized and saved to Quotations list!`);
+      notify(`✅ Quotation ${newId} finalized and saved to Quotations list!`);
     }
     onClose();
   };
@@ -5317,15 +9664,15 @@ export function WorkspaceModal({
     <Modal onClose={onClose} className="workspace-modal">
       <div className="workspace">
         <div className="workspace-head">
-          <button className="close-btn" onClick={onClose}>âœ•</button>
-          <div className="ai-pill">âœ¨ Workspace</div>
+          <button className="close-btn" onClick={onClose}>✕</button>
+          <div className="ai-pill">✨ Workspace</div>
           <h2>Create Quotation</h2>
           <p>Generate accurate quotes from customer requests using AI.</p>
         </div>
 
         <div className="tool-launchers">
-          <button onClick={onScan}>ðŸ“„ Scan request</button>
-          <button onClick={onDesign}>ðŸŽ¨ Customize design</button>
+          <button onClick={onScan}>📄 Scan request</button>
+          <button onClick={onDesign}>🎨 Customize design</button>
         </div>
 
         <div className="workspace-grid">
@@ -5404,16 +9751,15 @@ export function WorkspaceModal({
     </Modal>
   );
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\hooks\useAICopilot.ts
 
-`	ypescript
+```tsx
 "use client";
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   useAICopilot â€” chat messages & command handling
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ──────────────────────────────────────────────
+   useAICopilot — chat messages & command handling
+   ────────────────────────────────────────────── */
 
 import { useState, useCallback } from "react";
 import { generateId } from "@/lib/utils";
@@ -5434,31 +9780,31 @@ function generateResponse(input: string): string {
   const lower = input.toLowerCase();
 
   if (lower.startsWith("/price") || lower.includes("reduce price")) {
-    return "Done â€” I've reduced all line item prices by 5%. The new total is â‚¹42,813 (previously â‚¹45,066). This brings the margin down from 22% to 17.8%. Would you like to adjust further?";
+    return "Done — I've reduced all line item prices by 5%. The new total is ₹42,813 (previously ₹45,066). This brings the margin down from 22% to 17.8%. Would you like to adjust further?";
   }
   if (lower.startsWith("/replace") || lower.includes("replace")) {
-    return "I found 1 imported product in this quotation. I can replace the **Pulse Oximeter Pro** (BPL Medical, â‚¹1,240) with **Pulse Oximeter Lite** (Dr. Trust, â‚¹980) â€” a local alternative with 92% specification match. Shall I make the swap?";
+    return "I found 1 imported product in this quotation. I can replace the **Pulse Oximeter Pro** (BPL Medical, ₹1,240) with **Pulse Oximeter Lite** (Dr. Trust, ₹980) — a local alternative with 92% specification match. Shall I make the swap?";
   }
   if (lower.startsWith("/govt") || lower.includes("government")) {
-    return "Government quotation format applied. Changes:\nâ€¢ Added GeM reference fields\nâ€¢ Included EMD clause\nâ€¢ Added warranty compliance section\nâ€¢ Format set to landscape A4\n\nReady for download.";
+    return "Government quotation format applied. Changes:\n• Added GeM reference fields\n• Included EMD clause\n• Added warranty compliance section\n• Format set to landscape A4\n\nReady for download.";
   }
   if (lower.startsWith("/freight") || lower.includes("freight") || lower.includes("shipping")) {
-    return "Freight estimate based on delivery to CityCare Hospital, Mumbai:\nâ€¢ Standard (7 days): â‚¹850\nâ€¢ Express (3 days): â‚¹1,400\nâ€¢ Same-day: â‚¹2,200\n\nWhich option should I add?";
+    return "Freight estimate based on delivery to CityCare Hospital, Mumbai:\n• Standard (7 days): ₹850\n• Express (3 days): ₹1,400\n• Same-day: ₹2,200\n\nWhich option should I add?";
   }
   if (lower.startsWith("/email") || lower.includes("email")) {
-    return '**Draft email generated:**\n\nSubject: Quotation QT-2026-0129 â€” Medline Systems\n\nDear Priya,\n\nPlease find attached our quotation for the requested medical equipment. The total comes to â‚¹45,066 inclusive of GST, with a 5% hospital discount applied.\n\nKey highlights:\nâ€¢ All items in stock â€” ready for dispatch\nâ€¢ Delivery within 7 working days\nâ€¢ Prices valid for 15 days\n\nPlease let me know if you need any adjustments.\n\nBest regards,\nAbhishek Jha\nMedline Systems';
+    return '**Draft email generated:**\n\nSubject: Quotation QT-2026-0129 — Medline Systems\n\nDear Priya,\n\nPlease find attached our quotation for the requested medical equipment. The total comes to ₹45,066 inclusive of GST, with a 5% hospital discount applied.\n\nKey highlights:\n• All items in stock — ready for dispatch\n• Delivery within 7 working days\n• Prices valid for 15 days\n\nPlease let me know if you need any adjustments.\n\nBest regards,\nAbhishek Jha\nMedline Systems';
   }
   if (lower.startsWith("/whatsapp") || lower.includes("whatsapp")) {
-    return "**WhatsApp message draft:**\n\nHi Priya ðŸ‘‹\n\nSharing the quotation for your recent request â€” QT-2026-0129.\n\nðŸ“‹ 3 items | â‚¹45,066 incl. GST\nðŸ·ï¸ 5% hospital discount applied\nðŸ“¦ All items in stock\n\nI've attached the PDF. Let me know if any changes are needed!\n\nâ€” Abhishek, Medline Systems";
+    return "**WhatsApp message draft:**\n\nHi Priya 👋\n\nSharing the quotation for your recent request — QT-2026-0129.\n\n📋 3 items | ₹45,066 incl. GST\n🏷️ 5% hospital discount applied\n📦 All items in stock\n\nI've attached the PDF. Let me know if any changes are needed!\n\n— Abhishek, Medline Systems";
   }
   if (lower.startsWith("/explain") || lower.includes("explain")) {
-    return "**Quotation Breakdown:**\n\n| Item | Qty | Rate | Amount |\n|---|---|---|---|\n| BP Monitor | 12 | â‚¹1,850 | â‚¹22,200 |\n| Pulse Oximeter | 8 | â‚¹1,240 | â‚¹9,920 |\n| IR Thermometer | 15 | â‚¹890 | â‚¹13,350 |\n\nSubtotal: â‚¹45,470\nDiscount (5%): -â‚¹2,274\nGST: â‚¹1,870\n**Total: â‚¹45,066**\n\nEstimated margin: 19.2% (â‚¹8,653)";
+    return "**Quotation Breakdown:**\n\n| Item | Qty | Rate | Amount |\n|---|---|---|---|\n| BP Monitor | 12 | ₹1,850 | ₹22,200 |\n| Pulse Oximeter | 8 | ₹1,240 | ₹9,920 |\n| IR Thermometer | 15 | ₹890 | ₹13,350 |\n\nSubtotal: ₹45,470\nDiscount (5%): -₹2,274\nGST: ₹1,870\n**Total: ₹45,066**\n\nEstimated margin: 19.2% (₹8,653)";
   }
   if (lower.startsWith("/tender") || lower.includes("tender")) {
     return "**Tender Summary:**\n\nI'll need a tender document to analyze. You can:\n1. Upload a PDF/image using the Scan tool\n2. Paste the tender text here\n\nI'll extract products, deadlines, warranty requirements, EMD, and generate a compliant quotation.";
   }
 
-  return `I understand you want to: "${input}". In a production environment, I'd process this with the AI backend. For now, try one of my commands:\n\nâ€¢ \`/price\` â€” Adjust pricing\nâ€¢ \`/email\` â€” Draft follow-up email\nâ€¢ \`/whatsapp\` â€” Draft WhatsApp message\nâ€¢ \`/explain\` â€” Explain quotation breakdown\nâ€¢ \`/freight\` â€” Add shipping charges`;
+  return `I understand you want to: "${input}". In a production environment, I'd process this with the AI backend. For now, try one of my commands:\n\n• \`/price\` — Adjust pricing\n• \`/email\` — Draft follow-up email\n• \`/whatsapp\` — Draft WhatsApp message\n• \`/explain\` — Explain quotation breakdown\n• \`/freight\` — Add shipping charges`;
 }
 
 export function useAICopilot() {
@@ -5496,16 +9842,15 @@ export function useAICopilot() {
 
   return { messages, isTyping, sendMessage, clearMessages };
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\hooks\useAITimeline.ts
 
-`	ypescript
+```tsx
 "use client";
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   useAITimeline â€” animated step-by-step pipeline
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ──────────────────────────────────────────────
+   useAITimeline — animated step-by-step pipeline
+   ────────────────────────────────────────────── */
 
 import { useState, useCallback, useRef } from "react";
 import { AI_TIMELINE_STEPS } from "@/lib/constants";
@@ -5540,7 +9885,7 @@ export function useAITimeline() {
         prev.map((s, idx) => (idx === i ? { ...s, status: "running" } : s))
       );
 
-      // Simulate processing time (300â€“800ms per step)
+      // Simulate processing time (300–800ms per step)
       const duration = 300 + Math.random() * 500;
       await new Promise((resolve) => setTimeout(resolve, duration));
 
@@ -5562,16 +9907,15 @@ export function useAITimeline() {
 
   return { steps, isRunning, currentIndex, isComplete, start, reset };
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\hooks\useKeyboardShortcuts.ts
 
-`	ypescript
+```tsx
 "use client";
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   useKeyboardShortcuts â€” global hotkey registry
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ──────────────────────────────────────────────
+   useKeyboardShortcuts — global hotkey registry
+   ────────────────────────────────────────────── */
 
 import { useEffect } from "react";
 
@@ -5605,16 +9949,15 @@ export function useKeyboardShortcuts(shortcuts: ShortcutMap) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [shortcuts]);
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\hooks\useQuotation.ts
 
-`	ypescript
+```tsx
 "use client";
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   useQuotation â€” quotation line-items & totals
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ──────────────────────────────────────────────
+   useQuotation — quotation line-items & totals
+   ────────────────────────────────────────────── */
 
 import { useMemo, useState, useCallback } from "react";
 import { INITIAL_QUOTE_ITEMS } from "@/lib/constants";
@@ -5705,17 +10048,16 @@ export function useQuotation(initial: QuoteItem[] = INITIAL_QUOTE_ITEMS) {
     decrementDiscount,
   };
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\hooks\useTheme.ts
 
-`	ypescript
+```tsx
 /* eslint-disable react-hooks/set-state-in-effect */
 "use client";
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   useTheme â€” light / dark mode with persistence
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ──────────────────────────────────────────────
+   useTheme — light / dark mode with persistence
+   ────────────────────────────────────────────── */
 
 import { useState, useEffect, useCallback } from "react";
 import type { Theme } from "@/types";
@@ -5745,16 +10087,15 @@ export function useTheme() {
 
   return { theme, setTheme, toggleTheme };
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\hooks\useToast.ts
 
-`	ypescript
+```tsx
 "use client";
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   useToast â€” ephemeral notifications
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ──────────────────────────────────────────────
+   useToast — ephemeral notifications
+   ────────────────────────────────────────────── */
 
 import { useState, useCallback, useRef } from "react";
 
@@ -5778,217 +10119,411 @@ export function useToast(duration = 2600) {
 
   return { toast, notify, clearToast };
 }
+```
 
-``n
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\lib\quotationEngine\exceljsEngine.ts
 
-## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\lib\constants.ts
+```tsx
+"use client";
 
-`	ypescript
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   QuoteAI â€” Constants & Mock Data
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+import ExcelJS from "exceljs";
+import type { ExcelPayload } from "@/lib/excel";
+import type { QuotationEngineMapping, PreExportValidationResult, QuotationEngineResponse } from "./types";
+import { createQuotationModel, type InternalQuotationModel } from "@/services/quotationModel";
+import { analyzeExcelTemplate } from "@/services/excelAnalyzer";
+import type { ExcelTemplateMapping } from "@/types";
 
-import type {
-  NavItem,
-  QuoteItem,
-  BrandSettings,
-  CompanySettings,
-  Customer,
-  FollowUp,
-  Product,
-  AppNotification,
-  Task,
-  AIStep,
-  ReviewCheckItem,
-  StatData,
-  Quotation,
-  TimelineEvent,
-} from "@/types";
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const cleanBase64 = base64.replace(/^data:.*;base64,/, "");
+  const binaryString = window.atob(cleanBase64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
 
-// â”€â”€ Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function triggerDownload(buffer: ExcelJS.Buffer, fileName: string): void {
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+}
 
-export const NAV_ITEMS: NavItem[] = [
-  { name: "Overview", icon: "âŒ‚" },
-  { name: "OCR Hub", icon: "ðŸ“„", badge: "NEW" },
-  { name: "AI Workspace", icon: "âœ¦" },
-  { name: "Quotations", icon: "â–£" },
-  { name: "Customers", icon: "â™™" },
-  { name: "Products", icon: "â—ˆ" },
-  { name: "Follow-ups", icon: "â—·", badge: 3 },
-  { name: "Analytics", icon: "âŒ" },
-];
+/**
+ * Extracts or converts existing template analysis into standard QuotationEngineMapping.
+ */
+function toEngineMapping(mapping: ExcelTemplateMapping): QuotationEngineMapping {
+  const clientCoords = mapping.clientDetailsCoords || {};
+  return {
+    productStartRow: mapping.dataStartRowIndex || (mapping.headerRowIndex ? mapping.headerRowIndex + 1 : 12),
+    productColumn: mapping.columns?.product || 2,
+    qtyColumn: mapping.columns?.qty || 4,
+    priceColumn: mapping.columns?.rate || 5,
+    gstColumn: mapping.columns?.gst,
+    amountColumn: mapping.columns?.amount || 7,
+    customerNameCell: clientCoords.nameRow && clientCoords.nameCol ? { row: clientCoords.nameRow, col: clientCoords.nameCol } : undefined,
+    addressCell: clientCoords.addressRow && clientCoords.addressCol ? { row: clientCoords.addressRow, col: clientCoords.addressCol } : undefined,
+    quotationNumberCell: mapping.quotationNoCoords?.row && mapping.quotationNoCoords?.col ? { row: mapping.quotationNoCoords.row, col: mapping.quotationNoCoords.col } : undefined,
+    dateCell: mapping.dateCoords?.row && mapping.dateCoords?.col ? { row: mapping.dateCoords.row, col: mapping.dateCoords.col } : undefined,
+  };
+}
 
-// â”€â”€ Default Brand â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/**
+ * Performs strict pre-export validation against both data model and populated spreadsheet.
+ */
+function validatePreExport(
+  model: InternalQuotationModel,
+  worksheet: ExcelJS.Worksheet,
+  mapping: QuotationEngineMapping
+): PreExportValidationResult {
+  const errors: string[] = [];
+  let missingProduct = false;
+  let missingQuantity = false;
+  let invalidPrice = false;
+  let brokenFormula = false;
+  let missingMapping = false;
+  let invalidTemplate = false;
 
-export const DEFAULT_BRAND: BrandSettings = {
-  name: "Medline Systems",
-  accent: "#7052d7",
-  terms: "Prices are valid for 15 days. Delivery within 7 working days.",
-  templateStyle: "modern",
-};
+  // 1. Check Invalid Template
+  if (!worksheet || !worksheet.rowCount || worksheet.rowCount <= 0) {
+    invalidTemplate = true;
+    errors.push("Invalid template: Worksheet is empty or cannot be accessed.");
+  }
 
-export const DEFAULT_COMPANY: CompanySettings = {
-  name: "Medline Systems",
-  gstNumber: "27AABCM4521A1Z5",
-  email: "sales@medlinesystems.in",
-  defaultGst: "12%",
-  bankAccount: "HDFC Bank Â· â€¢â€¢â€¢â€¢ 8821",
-};
+  // 2. Check Missing Mapping
+  if (!mapping.productStartRow || !mapping.productColumn || !mapping.qtyColumn || !mapping.priceColumn || !mapping.amountColumn) {
+    missingMapping = true;
+    errors.push("Missing mapping: One or more essential column coordinates (product, qty, price, amount) are missing.");
+  }
 
-// â”€â”€ Dashboard Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // 3. Check Data Model & Populated Rows for Products, Quantities, Prices
+  if (!model.products || model.products.length === 0) {
+    missingProduct = true;
+    errors.push("Missing product: No products present in the quotation model.");
+  } else {
+    model.products.forEach((p, idx) => {
+      const rowNum = mapping.productStartRow + idx;
+      const row = worksheet.getRow(rowNum);
+      const prodVal = row.getCell(mapping.productColumn).value;
+      const qtyVal = row.getCell(mapping.qtyColumn).value;
+      const priceVal = row.getCell(mapping.priceColumn).value;
 
-export const DASHBOARD_STATS: StatData[] = [
-  { icon: "â–£", label: "Total quotations", value: "128", change: "12.5%", positive: true },
-  { icon: "â‚¹", label: "Quoted value", value: "â‚¹ 18.4L", change: "8.2%", positive: true },
-  { icon: "â—·", label: "Pending follow-ups", value: "14", change: "3 need attention" },
-  { icon: "â™™", label: "Active customers", value: "86", change: "6 new this month", positive: true },
-];
+      if (!p.product || !String(p.product).trim() || prodVal === null || prodVal === undefined || !String(prodVal).trim()) {
+        missingProduct = true;
+        errors.push(`Missing product at line #${idx + 1} (Row ${rowNum}).`);
+      }
+      if (!p.qty || p.qty <= 0 || isNaN(Number(p.qty)) || qtyVal === null || qtyVal === undefined || isNaN(Number(qtyVal))) {
+        missingQuantity = true;
+        errors.push(`Missing or invalid quantity at line #${idx + 1} (Row ${rowNum}).`);
+      }
+      if (p.rate === undefined || p.rate < 0 || isNaN(Number(p.rate)) || priceVal === null || priceVal === undefined || isNaN(Number(priceVal))) {
+        invalidPrice = true;
+        errors.push(`Invalid price at line #${idx + 1} (Row ${rowNum}).`);
+      }
+    });
+  }
 
-// â”€â”€ Initial Quote Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // 4. Check Broken Formulas across the entire sheet
+  worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      const val = cell.value;
+      if (val !== null && typeof val === "object") {
+        if ("error" in (val as any)) {
+          const errCode = String((val as any).error);
+          if (/^#(REF!|VALUE!|NAME\?|DIV\/0!|NULL!|N\/A|NUM!)/i.test(errCode)) {
+            brokenFormula = true;
+            errors.push(`Broken formula detected at cell ${cell.address} (Row ${rowNumber}, Col ${colNumber}): ${errCode}`);
+          }
+        }
+        if ("formula" in (val as any)) {
+          const formStr = String((val as any).formula);
+          const res = (val as any).result;
+          if (/^#(REF!|VALUE!|NAME\?|DIV\/0!|NULL!|N\/A)/i.test(formStr) || /^#(REF!|VALUE!|NAME\?|DIV\/0!|NULL!|N\/A)/i.test(String(res || ""))) {
+            brokenFormula = true;
+            errors.push(`Broken formula reference at cell ${cell.address}: ${formStr}`);
+          }
+        }
+      } else if (typeof val === "string") {
+        if (/^#(REF!|VALUE!|NAME\?|DIV\/0!|NULL!|N\/A)/i.test(val.trim())) {
+          brokenFormula = true;
+          errors.push(`Broken formula literal at cell ${cell.address}: ${val.trim()}`);
+        }
+      }
+    });
+  });
 
-export const INITIAL_QUOTE_ITEMS: QuoteItem[] = [
-  { id: 1, product: "Digital Blood Pressure Monitor", sku: "MED-BP-001", qty: 12, rate: 1850, gst: 12, confidence: 97, aiReason: "Exact alias match from inventory", matchedFrom: "BP Machine" },
-  { id: 2, product: "Pulse Oximeter Pro", sku: "MED-PO-024", qty: 8, rate: 1240, gst: 12, confidence: 94, aiReason: "Alias matched: pulse oxymeter â†’ Pulse Oximeter Pro", matchedFrom: "pulse oxymeter" },
-  { id: 3, product: "Infrared Thermometer", sku: "MED-IT-017", qty: 15, rate: 890, gst: 5, confidence: 99, aiReason: "Direct product name match", matchedFrom: "infrared thermometer" },
-];
+  return {
+    valid: errors.length === 0,
+    missingProduct,
+    missingQuantity,
+    invalidPrice,
+    brokenFormula,
+    missingMapping,
+    invalidTemplate,
+    errors,
+  };
+}
 
-// â”€â”€ Products Catalog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/**
+ * Helper: Shift relative row occurrences in an Excel formula string from oldRow to newRow.
+ * E.g., shifting formula "E12*F12" from row 12 to 13 becomes "E13*F13".
+ */
+function shiftFormulaRow(formula: string, oldRow: number, newRow: number): string {
+  const reg = new RegExp(`(\\b[A-Z]+)${oldRow}\\b`, "gi");
+  return formula.replace(reg, `$1${newRow}`);
+}
 
-export const PRODUCTS: Product[] = [
-  { id: "p1", name: "Digital Blood Pressure Monitor", sku: "MED-BP-001", brand: "Omron", supplier: "MedEquip India", warranty: "2 years", gst: 12, rate: 1850, stock: 45, barcode: "8901234567001", category: "Diagnostics", compatibleProducts: ["p5"], replacementProducts: ["p6"] },
-  { id: "p2", name: "Pulse Oximeter Pro", sku: "MED-PO-024", brand: "BPL Medical", supplier: "BPL Direct", warranty: "1 year", gst: 12, rate: 1240, stock: 32, barcode: "8901234567002", category: "Diagnostics" },
-  { id: "p3", name: "Infrared Thermometer", sku: "MED-IT-017", brand: "Dr. Trust", supplier: "HealthKart B2B", warranty: "1 year", gst: 5, rate: 890, stock: 78, barcode: "8901234567003", category: "Diagnostics" },
-  { id: "p4", name: "Nebulizer Compressor", sku: "MED-NB-009", brand: "Philips", supplier: "Philips Healthcare", warranty: "2 years", gst: 12, rate: 2450, stock: 18, barcode: "8901234567004", category: "Respiratory" },
-  { id: "p5", name: "Stethoscope Classic III", sku: "MED-ST-003", brand: "Littmann", supplier: "3M India", warranty: "5 years", gst: 12, rate: 6800, stock: 12, barcode: "8901234567005", category: "Diagnostics" },
-  { id: "p6", name: "Automatic BP Monitor Advanced", sku: "MED-BP-002", brand: "Omron", supplier: "MedEquip India", warranty: "3 years", gst: 12, rate: 2650, stock: 8, barcode: "8901234567006", category: "Diagnostics", compatibleProducts: ["p5"] },
-  { id: "p7", name: "Surgical Gloves (Box/100)", sku: "MED-SG-041", brand: "Supermax", supplier: "Supermax India", warranty: "N/A", gst: 12, rate: 420, stock: 200, barcode: "8901234567007", category: "Consumables" },
-  { id: "p8", name: "Digital Weighing Scale", sku: "MED-WS-012", brand: "Essae", supplier: "Essae Digitronics", warranty: "1 year", gst: 18, rate: 3200, stock: 5, barcode: "8901234567008", category: "General" },
-  { id: "p9", name: "ECG Machine 12-Channel", sku: "MED-ECG-001", brand: "BPL Medical", supplier: "BPL Direct", warranty: "3 years", gst: 12, rate: 85000, stock: 3, barcode: "8901234567009", category: "Diagnostics" },
-  { id: "p10", name: "Glucometer Kit", sku: "MED-GL-018", brand: "Accu-Chek", supplier: "Roche India", warranty: "2 years", gst: 5, rate: 1350, stock: 0, barcode: "8901234567010", category: "Diagnostics" },
-];
+/**
+ * SECOND Quotation Engine: High-Fidelity ExcelJS Engine
+ * Implements strict, reliable mapping preservation and robust pre-export validation.
+ */
+export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<QuotationEngineResponse> {
+  const { brand, company, items, discount, tax, total, quotationId, customerName, clientDetails, date } = payload;
+  const warnings: string[] = [];
 
-// â”€â”€ Customers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // 1. Build Data Model
+  const model: InternalQuotationModel = createQuotationModel(
+    {
+      quotationId,
+      customerName,
+      clientDetails,
+      items,
+      discount,
+      tax,
+      total,
+      date,
+    },
+    brand,
+    company
+  );
 
-export const CUSTOMERS: Customer[] = [
-  { id: "c1", name: "Arjun Rao", company: "Sapphire Hospitals", email: "arjun@sapphire.in", phone: "+91 98765 43210", initials: "AR", color: "#fde7d5", totalOrders: 24, totalValue: 840000, lastOrder: "2026-07-20", notes: "Prefers Omron brand for BP monitors." },
-  { id: "c2", name: "Sana Khan", company: "Nova Meditech", email: "sana@nova.in", phone: "+91 98765 43211", initials: "SK", color: "#dbeafe", totalOrders: 18, totalValue: 620000, lastOrder: "2026-07-22", notes: "Usually requests revised quotes within 3 days." },
-  { id: "c3", name: "Vivek Menon", company: "Carewell Clinics", email: "vivek@carewell.in", phone: "+91 98765 43212", initials: "VM", color: "#ede9fe", totalOrders: 31, totalValue: 1120000, lastOrder: "2026-07-18" },
-  { id: "c4", name: "Priya Sharma", company: "CityCare Hospital", email: "priya@citycare.in", phone: "+91 98765 43213", initials: "PS", color: "#dcfce7", totalOrders: 12, totalValue: 450000, lastOrder: "2026-07-24" },
-  { id: "c5", name: "Rahul Verma", company: "LifeLine Diagnostics", email: "rahul@lifeline.in", phone: "+91 98765 43214", initials: "RV", color: "#fef3c7", totalOrders: 8, totalValue: 280000, lastOrder: "2026-07-15" },
-];
+  // 2. Require Custom Excel Template for ExcelJS Engine
+  if (!brand.customExcelTemplate) {
+    throw new Error("ExcelJS Engine requires a custom uploaded Excel template. Falling back...");
+  }
 
-// â”€â”€ Follow-ups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const buffer = base64ToArrayBuffer(brand.customExcelTemplate);
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
 
-export const FOLLOWUPS: FollowUp[] = [
-  { id: "f1", initials: "AR", color: "#fde7d5", name: "Arjun Rao", company: "Sapphire Hospitals", note: "Quotation sent 5 days ago", action: "Send follow-up", dueDate: "2026-07-24", priority: "high" },
-  { id: "f2", initials: "SK", color: "#dbeafe", name: "Sana Khan", company: "Nova Meditech", note: "Requested a revised quote", action: "Review quote", dueDate: "2026-07-24", priority: "high" },
-  { id: "f3", initials: "VM", color: "#ede9fe", name: "Vivek Menon", company: "Carewell Clinics", note: "Quote expires tomorrow", action: "Send reminder", dueDate: "2026-07-25", priority: "medium" },
-];
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) {
+    throw new Error("Invalid template: No worksheet found in workbook.");
+  }
 
-// â”€â”€ Quotation History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // 3. Retrieve or Analyze Template Mapping (Strictly once, NO redundant re-scans)
+  let rawMapping: ExcelTemplateMapping | undefined = brand.customExcelMapping;
+  if (!rawMapping) {
+    console.log("⚡ ExcelJS Engine: No stored mapping found. Running single AI template analysis...");
+    rawMapping = await analyzeExcelTemplate(brand.customExcelTemplate);
+  } else {
+    console.log("✨ ExcelJS Engine: Reusing stored template mapping without re-analysis.");
+  }
 
-export const QUOTATIONS: Quotation[] = [
-  {
-    id: "QT-2026-0128", customer: "CityCare Hospital", customerId: "c4",
-    items: INITIAL_QUOTE_ITEMS, discount: 5, subtotal: 45066, tax: 4320, total: 45066,
-    status: "sent", versions: [{ version: 1, changes: [], createdAt: "2026-07-24T10:42:00", createdBy: "AI" }],
-    currentVersion: 1, createdAt: "2026-07-24T10:42:00", updatedAt: "2026-07-24T10:42:00", approvalStatus: "approved",
-  },
-  {
-    id: "QT-2026-0127", customer: "Sapphire Hospitals", customerId: "c1",
-    items: [INITIAL_QUOTE_ITEMS[0], INITIAL_QUOTE_ITEMS[2]], discount: 8, subtotal: 124800, tax: 13104, total: 124800,
-    status: "viewed", versions: [{ version: 1, changes: [], createdAt: "2026-07-23T14:30:00", createdBy: "Abhishek" }, { version: 2, changes: [{ field: "discount", oldValue: "5%", newValue: "8%" }], createdAt: "2026-07-23T16:00:00", createdBy: "AI" }],
-    currentVersion: 2, createdAt: "2026-07-23T14:30:00", updatedAt: "2026-07-23T16:00:00", approvalStatus: "approved",
-  },
-  {
-    id: "QT-2026-0126", customer: "Nova Meditech", customerId: "c2",
-    items: [INITIAL_QUOTE_ITEMS[1]], discount: 3, subtotal: 28940, tax: 3217, total: 28940,
-    status: "draft", versions: [{ version: 1, changes: [], createdAt: "2026-07-22T09:15:00", createdBy: "AI" }],
-    currentVersion: 1, createdAt: "2026-07-22T09:15:00", updatedAt: "2026-07-22T09:15:00", approvalStatus: "ai-review",
-  },
-];
+  const engineMapping: QuotationEngineMapping = toEngineMapping(rawMapping);
 
-// â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // 4. Fill Only Dynamic Fields via Exact Coordinate Mapping
+  if (engineMapping.customerNameCell) {
+    const cell = worksheet.getRow(engineMapping.customerNameCell.row).getCell(engineMapping.customerNameCell.col);
+    cell.value = model.customer.name || "";
+  }
+  if (engineMapping.addressCell && model.customer.address) {
+    const cell = worksheet.getRow(engineMapping.addressCell.row).getCell(engineMapping.addressCell.col);
+    cell.value = model.customer.address;
+  }
+  if (engineMapping.quotationNumberCell) {
+    const cell = worksheet.getRow(engineMapping.quotationNumberCell.row).getCell(engineMapping.quotationNumberCell.col);
+    cell.value = model.quotationId;
+  }
+  if (engineMapping.dateCell) {
+    const cell = worksheet.getRow(engineMapping.dateCell.row).getCell(engineMapping.dateCell.col);
+    cell.value = model.date;
+  }
 
-export const NOTIFICATIONS: AppNotification[] = [
-  { id: "n1", type: "quotation-ready", title: "Quotation Ready", message: "QT-2026-0128 for CityCare Hospital is ready for export.", timestamp: "2026-07-24T10:42:00", read: false },
-  { id: "n2", type: "review-required", title: "Review Required", message: "Low confidence match found in QT-2026-0126. Please verify.", timestamp: "2026-07-24T09:30:00", read: false },
-  { id: "n3", type: "low-stock", title: "Low Stock Alert", message: "Glucometer Kit (MED-GL-018) is out of stock.", timestamp: "2026-07-24T08:00:00", read: false },
-  { id: "n4", type: "customer-reply", title: "Customer Reply", message: "Arjun Rao responded to QT-2026-0127.", timestamp: "2026-07-23T16:45:00", read: true },
-  { id: "n5", type: "pending-followup", title: "Follow-up Due", message: "Follow-up with Sana Khan is overdue by 1 day.", timestamp: "2026-07-23T09:00:00", read: true },
-];
+  // 5. Determine Sample Rows & Handle Non-Destructive Dynamic Row Insertion
+  const startRow = engineMapping.productStartRow;
+  const origEndRow = rawMapping.dataEndRowIndex || startRow;
+  const sampleRowCount = Math.max(1, origEndRow - startRow + 1);
+  const itemsCount = model.products.length;
+  let rowsInserted = 0;
 
-// â”€â”€ Tasks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  if (itemsCount > sampleRowCount) {
+    rowsInserted = itemsCount - sampleRowCount;
+    const sampleReferenceRowNumber = origEndRow;
+    const sampleRefRow = worksheet.getRow(sampleReferenceRowNumber);
 
-export const TASKS: Task[] = [
-  { id: "t1", title: "Review AI-matched products", description: "2 items below 90% confidence need verification", priority: "high", status: "pending", type: "review" },
-  { id: "t2", title: "Follow up with Arjun Rao", description: "Quotation QT-2026-0127 sent 5 days ago â€” no response", priority: "high", status: "pending", type: "follow-up" },
-  { id: "t3", title: "AI: Offer 6% discount to Carewell", description: "Based on â‚¹11.2L annual purchase history, recommended discount: 6%", priority: "medium", status: "pending", type: "ai-suggestion" },
-  { id: "t4", title: "Restock Glucometer Kits", description: "Current stock: 0 units. 3 pending quotations include this item.", priority: "high", status: "pending", type: "ai-suggestion" },
-  { id: "t5", title: "Send reminder to Vivek Menon", description: "Quote QT-2026-0125 expires tomorrow", priority: "medium", status: "pending", type: "follow-up" },
-];
+    // Splice blank rows above totals/footer while preserving sheet layout
+    worksheet.spliceRows(sampleReferenceRowNumber + 1, 0, ...new Array(rowsInserted).fill([]));
 
-// â”€â”€ AI Timeline Steps â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // Copy formatting, styles, heights, and borders cleanly to inserted rows
+    for (let i = 1; i <= rowsInserted; i++) {
+      const targetRowNumber = sampleReferenceRowNumber + i;
+      const targetRow = worksheet.getRow(targetRowNumber);
+      targetRow.height = sampleRefRow.height;
 
-export const AI_TIMELINE_STEPS: AIStep[] = [
-  { id: "s1", label: "Document uploaded", description: "Customer request received", status: "pending" },
-  { id: "s2", label: "Reading document", description: "AI is analyzing the uploaded content", status: "pending" },
-  { id: "s3", label: "OCR complete", description: "Text extraction finished", status: "pending" },
-  { id: "s4", label: "Extracting products", description: "Identifying product names and quantities", status: "pending" },
-  { id: "s5", label: "Matching inventory", description: "Cross-referencing with product catalog", status: "pending" },
-  { id: "s6", label: "Checking GST", description: "Verifying GST rates for matched products", status: "pending" },
-  { id: "s7", label: "Checking stock", description: "Confirming inventory availability", status: "pending" },
-  { id: "s8", label: "Generating quotation", description: "Building quotation with matched data", status: "pending" },
-  { id: "s9", label: "Reviewing quotation", description: "Running quality checks", status: "pending" },
-  { id: "s10", label: "Quotation ready", description: "Ready for review and export", status: "pending" },
-];
+      sampleRefRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+        const targetCell = targetRow.getCell(colIdx);
+        targetCell.style = Object.assign({}, cell.style);
+        if (cell.numFmt) targetCell.numFmt = cell.numFmt;
+      });
+    }
+  }
 
-// â”€â”€ AI Review Checks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // 6. Populate Dynamic Line Items & Preserve Formulas Whenever Possible
+  const referenceSampleRow = worksheet.getRow(startRow);
+  const sampleAmountCellVal = referenceSampleRow.getCell(engineMapping.amountColumn).value;
+  let hasNativeAmountFormula = false;
+  let templateFormulaStr = "";
 
-export const AI_REVIEW_CHECKS: ReviewCheckItem[] = [
-  { id: "r1", label: "No duplicate products", description: "All line items are unique", severity: "success", resolved: true },
-  { id: "r2", label: "Quantities verified", description: "All quantities match the customer request", severity: "success", resolved: true },
-  { id: "r3", label: "GST rates correct", description: "GST rates verified against latest schedule", severity: "success", resolved: true },
-  { id: "r4", label: "Confidence above threshold", description: "1 item below 95% confidence â€” review recommended", severity: "warning", resolved: false },
-  { id: "r5", label: "All products in stock", description: "All items available in current inventory", severity: "success", resolved: true },
-  { id: "r6", label: "Prices current", description: "All prices match the latest rate card", severity: "success", resolved: true },
-  { id: "r7", label: "Margin check", description: "Estimated margin: 19.2% â€” within acceptable range", severity: "success", resolved: true },
-  { id: "r8", label: "Customer data complete", description: "Customer name, address and GST are present", severity: "success", resolved: true },
-];
+  if (sampleAmountCellVal && typeof sampleAmountCellVal === "object" && "formula" in (sampleAmountCellVal as any)) {
+    hasNativeAmountFormula = true;
+    templateFormulaStr = String((sampleAmountCellVal as any).formula);
+  }
 
-// â”€â”€ Customer Timeline Events â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  for (let i = 0; i < Math.max(itemsCount, sampleRowCount); i++) {
+    const currentRowNum = startRow + i;
+    const row = worksheet.getRow(currentRowNum);
 
-export const CUSTOMER_TIMELINE: TimelineEvent[] = [
-  { id: "te1", type: "quotation", title: "Quotation QT-2026-0128 sent", description: "â‚¹45,066 â€” 3 items including BP monitors", timestamp: "2026-07-24T10:42:00" },
-  { id: "te2", type: "ai-note", title: "AI Note", description: "Customer prefers Omron brand. Last 3 orders included BP monitors.", timestamp: "2026-07-24T10:40:00" },
-  { id: "te3", type: "email", title: "Email sent", description: "Quotation attached and sent to priya@citycare.in", timestamp: "2026-07-24T10:45:00" },
-  { id: "te4", type: "whatsapp", title: "WhatsApp message", description: "\"Hi Priya, sharing the quotation as discussed. Let me know if adjustments are needed.\"", timestamp: "2026-07-24T10:46:00" },
-  { id: "te5", type: "followup", title: "Follow-up scheduled", description: "Auto-scheduled for 3 days after quotation sent", timestamp: "2026-07-24T10:47:00" },
-  { id: "te6", type: "quotation", title: "Quotation QT-2026-0112 accepted", description: "â‚¹32,400 â€” consumables order", timestamp: "2026-07-10T14:30:00" },
-  { id: "te7", type: "document", title: "Purchase order uploaded", description: "PO-CC-2026-044 received from CityCare procurement", timestamp: "2026-07-11T09:15:00" },
-];
+    if (i < itemsCount) {
+      const p = model.products[i];
+      row.getCell(engineMapping.productColumn).value = p.product;
+      row.getCell(engineMapping.qtyColumn).value = p.qty;
+      row.getCell(engineMapping.priceColumn).value = p.rate;
 
-// â”€â”€ Copilot Suggested Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      if (engineMapping.gstColumn) {
+        row.getCell(engineMapping.gstColumn).value = p.gst ? `${p.gst}%` : "0%";
+      }
 
-export const COPILOT_COMMANDS = [
-  { command: "/price", label: "Adjust pricing", description: "Reduce price by 5%" },
-  { command: "/replace", label: "Replace products", description: "Swap imported products with local alternatives" },
-  { command: "/govt", label: "Government format", description: "Generate government quotation format" },
-  { command: "/premium", label: "Premium format", description: "Generate premium quotation layout" },
-  { command: "/freight", label: "Add freight", description: "Add shipping and freight charges" },
-  { command: "/qty", label: "Update quantity", description: "Increase or decrease item quantities" },
-  { command: "/tender", label: "Summarize tender", description: "Extract and summarize tender details" },
-  { command: "/explain", label: "Explain quotation", description: "Explain pricing and margin breakdown" },
-  { command: "/invoice", label: "Create invoice", description: "Convert quotation to invoice" },
-  { command: "/email", label: "Draft email", description: "Generate a follow-up email" },
-  { command: "/whatsapp", label: "Draft WhatsApp", description: "Generate a WhatsApp message" },
-];
+      const amountCell = row.getCell(engineMapping.amountColumn);
+      if (hasNativeAmountFormula && templateFormulaStr) {
+        // Automatically adjust row references in formula (e.g., E12*F12 -> E13*F13)
+        const shiftedFormula = shiftFormulaRow(templateFormulaStr, startRow, currentRowNum);
+        amountCell.value = {
+          formula: shiftedFormula,
+          result: p.amount,
+        };
+      } else {
+        // Generate reliable calculation formula if template lacked one
+        const qtyLetter = worksheet.getColumn(engineMapping.qtyColumn).letter;
+        const priceLetter = worksheet.getColumn(engineMapping.priceColumn).letter;
+        amountCell.value = {
+          formula: `${qtyLetter}${currentRowNum}*${priceLetter}${currentRowNum}`,
+          result: p.amount,
+        };
+      }
+    } else {
+      // For leftover sample rows in template when itemsCount < sampleRowCount, clear ONLY the item dynamic cells
+      row.getCell(engineMapping.productColumn).value = null;
+      row.getCell(engineMapping.qtyColumn).value = null;
+      row.getCell(engineMapping.priceColumn).value = null;
+      if (engineMapping.gstColumn) row.getCell(engineMapping.gstColumn).value = null;
+      row.getCell(engineMapping.amountColumn).value = null;
+    }
+  }
 
-``n
+  // 7. Recalculate Totals & Preserve Footer Formula Integrities
+  const actualEndRow = startRow + Math.max(itemsCount, sampleRowCount) - 1;
+  const amtLetter = worksheet.getColumn(engineMapping.amountColumn).letter;
+  const valCol = rawMapping.totals?.valueColumnIndex || engineMapping.amountColumn;
 
-## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\lib\excel.ts
+  if (rawMapping.totals?.subtotalRowIndex) {
+    const shiftedSubRowIdx = rawMapping.totals.subtotalRowIndex + rowsInserted;
+    const subCell = worksheet.getRow(shiftedSubRowIdx).getCell(valCol);
+    subCell.value = {
+      formula: `SUM(${amtLetter}${startRow}:${amtLetter}${actualEndRow})`,
+      result: model.totals.subtotal,
+    };
+  }
+  if (rawMapping.totals?.discountRowIndex && model.discount.value > 0) {
+    const shiftedDiscIdx = rawMapping.totals.discountRowIndex + rowsInserted;
+    worksheet.getRow(shiftedDiscIdx).getCell(valCol).value = -model.discount.value;
+  }
+  if (rawMapping.totals?.taxRowIndex) {
+    const shiftedTaxIdx = rawMapping.totals.taxRowIndex + rowsInserted;
+    worksheet.getRow(shiftedTaxIdx).getCell(valCol).value = model.gstTotal;
+  }
+  if (rawMapping.totals?.totalRowIndex) {
+    const shiftedTotalIdx = rawMapping.totals.totalRowIndex + rowsInserted;
+    const totalCell = worksheet.getRow(shiftedTotalIdx).getCell(valCol);
+    const cellVal = totalCell.value;
+    // If original total already had a SUM or combination formula, ensure result is updated or assign standard payable
+    if (!cellVal || typeof cellVal !== "object" || !("formula" in (cellVal as any))) {
+      totalCell.value = model.totals.payable;
+    } else {
+      (cellVal as any).result = model.totals.payable;
+    }
+  }
 
-`	ypescript
+  // 8. Execute Comprehensive Pre-Export Validation
+  const validationReport = validatePreExport(model, worksheet, engineMapping);
+  if (!validationReport.valid) {
+    const errorSummary = `ExcelJS Engine Pre-Export Validation Failed:\n` + validationReport.errors.map((e) => `• ${e}`).join("\n");
+    console.warn("⚠️ " + errorSummary);
+    throw new Error(errorSummary);
+  }
+
+  // 9. Never Overwrite User's Original Template -> Always create Quotation_Output.xlsx
+  const outputBuffer = await workbook.xlsx.writeBuffer();
+  triggerDownload(outputBuffer, "Quotation_Output.xlsx");
+
+  return { warnings };
+}
+```
+
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\lib\quotationEngine\index.ts
+
+```tsx
+"use client";
+
+import type { ExcelPayload } from "@/lib/excel";
+import type { QuotationEngineType } from "./types";
+import { runLegacyQuotationEngine } from "./legacyEngine";
+import { runExcelJSQuotationEngine } from "./exceljsEngine";
+
+/**
+ * Switch engine between "legacy" and "exceljs".
+ * Example: const quotationEngine = "exceljs";
+ */
+export let quotationEngine: QuotationEngineType = "exceljs";
+
+export function setQuotationEngine(engine: QuotationEngineType): void {
+  quotationEngine = engine;
+  console.log(`🔄 Switched quotation engine to: [${engine.toUpperCase()}]`);
+}
+
+/**
+ * Central engine dispatcher with automatic error handling and fallback capability.
+ */
+export async function dispatchQuotationEngine(payload: ExcelPayload): Promise<{ warnings: string[] }> {
+  if (quotationEngine === "exceljs" && payload.brand.customExcelTemplate) {
+    try {
+      console.log("⚡ Executing High-Fidelity ExcelJS Engine...");
+      const res = await runExcelJSQuotationEngine(payload);
+      console.log("✅ ExcelJS Engine exported successfully to Quotation_Output.xlsx");
+      return res;
+    } catch (error: any) {
+      console.warn("⚠️ ExcelJS Engine encountered validation failure or error. Automatically falling back to Legacy Engine...", error);
+      const res = await runLegacyQuotationEngine(payload);
+      res.warnings.push(`ExcelJS Engine fallback: ${error?.message || "Unknown error"}`);
+      return res;
+    }
+  }
+
+  console.log("⚡ Executing Legacy Quotation Engine...");
+  return runLegacyQuotationEngine(payload);
+}
+```
+
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\lib\quotationEngine\legacyEngine.ts
+
+```tsx
 "use client";
 
 import ExcelJS from "exceljs";
@@ -5996,18 +10531,7 @@ import type { QuoteItem, BrandSettings, CompanySettings, ExcelTemplateMapping, C
 import { createQuotationModel, validateQuotationModel, type InternalQuotationModel } from "@/services/quotationModel";
 import { analyzeExcelTemplate } from "@/services/excelAnalyzer";
 
-export interface ExcelPayload {
-  brand: BrandSettings;
-  company: CompanySettings;
-  items: QuoteItem[];
-  discount: number;
-  tax: number;
-  total: number;
-  quotationId: string;
-  customerName: string;
-  clientDetails?: ClientDetails;
-  date: string;
-}
+import type { ExcelPayload } from "@/lib/excel";
 
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const cleanBase64 = base64.replace(/^data:.*;base64,/, "");
@@ -6036,7 +10560,7 @@ function triggerDownload(buffer: ExcelJS.Buffer, fileName: string): void {
  * Generate and download a branded quotation Excel file using ExcelJS.
  * Guarantees 100% preservation of colors, merged cells, formulas, borders, and logos.
  */
-export async function downloadQuotationExcel(payload: ExcelPayload): Promise<void> {
+export async function runLegacyQuotationEngine(payload: ExcelPayload): Promise<{ warnings: string[] }> {
   const { brand, company, items, discount, tax, total, quotationId, customerName, clientDetails, date } = payload;
   const fileName = `${quotationId}-${customerName.replace(/[^a-z0-9]/gi, "_")}.xlsx`;
 
@@ -6059,13 +10583,16 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
   // 2. Validate Model Integrity Before Exporting
   const validation = validateQuotationModel(model);
   if (!validation.valid) {
-    const errorMsg = "Quotation Validation Error:\n" + validation.errors.map((e) => `â€¢ ${e}`).join("\n");
+    const errorMsg = "Quotation Validation Error:\n" + validation.errors.map((e) => `• ${e}`).join("\n");
     throw new Error(errorMsg);
   }
 
   // 3. Custom Uploaded Excel Template Processing (High Fidelity)
   if (brand.customExcelTemplate) {
     try {
+      let noGstColumnDetected = false;
+      let totalsRowsMissingInTemplate = false;
+
       const buffer = base64ToArrayBuffer(brand.customExcelTemplate);
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(buffer);
@@ -6092,10 +10619,21 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         return String(cellValue).trim();
       }
 
-      // Helper: fuzzy match â€” checks if text contains any of the given keywords
+      // Helper: fuzzy match — checks if text contains any of the given keywords
       function fuzzyMatch(text: string, keywords: string[]): boolean {
         const lower = text.toLowerCase().trim();
         return keywords.some(kw => lower === kw || lower.includes(kw));
+      }
+
+      // Helper: check if a cell is blank or placeholder-looking
+      function isBlankOrPlaceholder(val: any): boolean {
+        if (val === null || val === undefined || val === "") return true;
+        const s = getCellText(val).trim();
+        if (!s) return true;
+        if (/^\[.+\]$/.test(s) || /^<.+>$/.test(s) || /_{2,}/.test(s) || /^\s*[\-\.]+\s*$/.test(s) || s.toLowerCase() === "n/a") {
+          return true;
+        }
+        return false;
       }
 
       // Ensure we have fallback template mapping
@@ -6105,6 +10643,35 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
       }
 
       // 3.5 Absolute Live Spreadsheet Analysis (Overriding buggy stored mappings)
+      // Prefer AI-mapped client details when available and valid over regex/fuzzyMatch fallback
+      const aiClientCoords = mapping.clientDetailsCoords;
+      const hasAiClientDetails = !!(
+        aiClientCoords &&
+        (aiClientCoords.nameRow || aiClientCoords.addressRow || aiClientCoords.gstRow || aiClientCoords.phoneRow)
+      );
+
+      if (hasAiClientDetails && aiClientCoords) {
+        if (aiClientCoords.nameRow && aiClientCoords.nameCol) {
+          const c = worksheet.getRow(aiClientCoords.nameRow).getCell(aiClientCoords.nameCol);
+          c.value = model.customer.name || "";
+        }
+        if (aiClientCoords.addressRow && aiClientCoords.addressCol && model.customer.address) {
+          const c = worksheet.getRow(aiClientCoords.addressRow).getCell(aiClientCoords.addressCol);
+          c.value = model.customer.address;
+        }
+        if (aiClientCoords.gstRow && aiClientCoords.gstCol && model.customer.gstNumber) {
+          const c = worksheet.getRow(aiClientCoords.gstRow).getCell(aiClientCoords.gstCol);
+          c.value = `GSTIN: ${model.customer.gstNumber}`;
+        }
+        if (aiClientCoords.phoneRow && aiClientCoords.phoneCol) {
+          const contactParts = [model.customer.phone, model.customer.email].filter(Boolean);
+          if (contactParts.length > 0) {
+            const c = worksheet.getRow(aiClientCoords.phoneRow).getCell(aiClientCoords.phoneCol);
+            c.value = `Phone: ${contactParts.join(" | ")}`;
+          }
+        }
+      }
+
       let trueHeaderRowIndex = mapping.headerRowIndex;
       const liveCols: {
         srNo?: number;
@@ -6125,12 +10692,12 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         row.eachCell({ includeEmpty: false }, (cell, colNum) => {
           const text = getCellText(cell.value).toUpperCase().trim();
           if (!text) return;
-          if (/^(SR|SL|S\.?\s*NO|NO\.|SNO)/.test(text)) { tempCols.srNo = colNum; currentMatches++; }
+          if (/^(SR|SL|S\.?\s*NO|NO\.?|SNO|ITEM\s*NO|NO$)/.test(text) && !/GST/i.test(text)) { tempCols.srNo = colNum; currentMatches++; }
           else if (/^(PRODUCT|ITEM|DESCRIPTION|PARTICULARS|NAME|SPECIFICATION|GOODS|DETAILS)/.test(text)) { tempCols.product = colNum; currentMatches++; }
           else if (/^(SKU|MODEL|CODE|PART|ITEM\s*CODE)/.test(text)) { tempCols.sku = colNum; currentMatches++; }
           else if (/^(QTY|QUANTITY|PIECES|UNITS|NOS)/.test(text)) { tempCols.qty = colNum; currentMatches++; }
           else if (/^(RATE|PRICE|UNIT\s*COST|COST|UNIT\s*PRICE)/.test(text)) { tempCols.rate = colNum; currentMatches++; }
-          else if (/^(GST|TAX|TAXED|TAXABLE|IGST|CGST|SGST|GST\s*%)/.test(text)) { tempCols.gst = colNum; currentMatches++; }
+          else if (/GST|IGST|CGST|SGST|TAX/.test(text) && !/GSTIN|GST\s*NO/.test(text)) { tempCols.gst = colNum; currentMatches++; }
           else if (/^(AMOUNT|TOTAL|VALUE|NET)/.test(text)) { tempCols.amount = colNum; currentMatches++; }
         });
 
@@ -6160,6 +10727,37 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
       }
       const dataEndRowIndex = (bestMatches >= 2) ? calculatedEndRow : mapping.dataEndRowIndex;
       const headerRowIndex = (bestMatches >= 2) ? trueHeaderRowIndex : mapping.headerRowIndex;
+
+      // Live totals-row scan at export time (BUG 2 fix)
+      const liveTotals: {
+        subtotalRowIndex?: number;
+        discountRowIndex?: number;
+        taxRowIndex?: number;
+        totalRowIndex?: number;
+      } = {};
+
+      const scanEnd = Math.min(worksheet.rowCount || dataEndRowIndex + 20, dataEndRowIndex + 25);
+      for (let r = dataEndRowIndex + 1; r <= scanEnd; r++) {
+        const row = worksheet.getRow(r);
+        row.eachCell({ includeEmpty: false }, (cell) => {
+          const text = getCellText(cell.value).trim();
+          if (!text) return;
+          if (/SUB\s*-?\s*TOTAL|TOTAL\s*BEFORE/i.test(text) && !liveTotals.subtotalRowIndex) {
+            liveTotals.subtotalRowIndex = r;
+          } else if (/DISCOUNT|LESS|REBATE/i.test(text) && !liveTotals.discountRowIndex) {
+            liveTotals.discountRowIndex = r;
+          } else if (/TAX|GST|IGST|CGST|SGST/i.test(text) && !/GSTIN|GST\s*NO/i.test(text) && !liveTotals.taxRowIndex) {
+            liveTotals.taxRowIndex = r;
+          } else if (/GRAND\s*TOTAL|TOTAL\s*PAYABLE|NET\s*PAYABLE|TOTAL\s*AMOUNT|^TOTAL$/i.test(text) && !liveTotals.totalRowIndex) {
+            liveTotals.totalRowIndex = r;
+          }
+        });
+      }
+
+      const activeSubtotalRow = liveTotals.subtotalRowIndex || mapping.totals?.subtotalRowIndex;
+      const activeDiscountRow = liveTotals.discountRowIndex || mapping.totals?.discountRowIndex;
+      const activeTaxRow = liveTotals.taxRowIndex || mapping.totals?.taxRowIndex;
+      const activeTotalRow = liveTotals.totalRowIndex || mapping.totals?.totalRowIndex;
 
       const sampleRowCount = Math.max(1, dataEndRowIndex - dataStartRowIndex + 1);
       const itemsCount = model.products.length;
@@ -6192,39 +10790,71 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
       const safeProductCol = liveCols.product || mapping.columns.product || 1;
       const safeAmountCol = liveCols.amount || (mapping.columns.amount !== safeProductCol ? mapping.columns.amount : undefined) || worksheet.columnCount || 6;
       
-      const safeSrNoCol = liveCols.srNo;
+      const safeSrNoCol = liveCols.srNo !== undefined ? liveCols.srNo : (mapping.columns.srNo !== safeProductCol ? mapping.columns.srNo : undefined);
       const safeSkuCol = liveCols.sku;
       const safeQtyCol = liveCols.qty;
       const safeRateCol = liveCols.rate;
       const safeGstCol = liveCols.gst;
+
+      const srNoCollidesWithProduct = safeSrNoCol === safeProductCol;
+      const skuCollidesWithProduct = safeSkuCol === safeProductCol;
+      const qtyCollidesWithProduct = safeQtyCol === safeProductCol;
+      const rateCollidesWithProduct = safeRateCol === safeProductCol;
+      const gstCollidesWithProduct = safeGstCol === safeProductCol;
 
       for (let i = 0; i < Math.max(itemsCount, sampleRowCount); i++) {
         const rNumber = dataStartRowIndex + i;
         const row = worksheet.getRow(rNumber);
 
         if (i < itemsCount) {
+          // Thoroughly wipe all existing dummy sample cell values across this row before item injection
+          for (let c = 1; c <= Math.max(worksheet.columnCount || 10, 25); c++) {
+            row.getCell(c).value = null;
+          }
+
           const p = model.products[i];
-          if (safeSrNoCol && safeSrNoCol !== safeProductCol) row.getCell(safeSrNoCol).value = i + 1;
+          if (safeSrNoCol && !srNoCollidesWithProduct) {
+            row.getCell(safeSrNoCol).value = i + 1;
+          }
+          // else: skip writing any serial number for this template — do not fall back to prefixing it into the product cell under any circumstance.
 
           // Pure, unpolluted product description
           row.getCell(safeProductCol).value = p.product;
 
-          if (safeSkuCol && safeSkuCol !== safeProductCol) row.getCell(safeSkuCol).value = p.sku;
-          if (safeQtyCol && safeQtyCol !== safeProductCol) row.getCell(safeQtyCol).value = p.qty;
-          if (safeRateCol && safeRateCol !== safeProductCol) row.getCell(safeRateCol).value = p.rate;
-          if (safeGstCol && safeGstCol !== safeProductCol && safeGstCol !== safeAmountCol) {
+          if (safeSkuCol && !skuCollidesWithProduct) row.getCell(safeSkuCol).value = p.sku;
+          if (safeQtyCol && !qtyCollidesWithProduct) row.getCell(safeQtyCol).value = p.qty;
+          if (safeRateCol && !rateCollidesWithProduct) row.getCell(safeRateCol).value = p.rate;
+
+          const hasDedicatedGstCol = safeGstCol && !gstCollidesWithProduct && safeGstCol !== safeAmountCol;
+          if (hasDedicatedGstCol) {
             row.getCell(safeGstCol).value = p.gst ? `${p.gst}%` : "x";
+          } else {
+            if ((p.gst || 0) > 0 || model.gstTotal > 0) {
+              noGstColumnDetected = true;
+            }
           }
 
-          if (safeQtyCol && safeRateCol) {
+          if (safeQtyCol && !qtyCollidesWithProduct && safeRateCol && !rateCollidesWithProduct) {
             const qtyColLetter = worksheet.getColumn(safeQtyCol).letter;
             const rateColLetter = worksheet.getColumn(safeRateCol).letter;
-            row.getCell(safeAmountCol).value = {
-              formula: `${qtyColLetter}${rNumber}*${rateColLetter}${rNumber}`,
-              result: p.amount,
-            };
+            if (!hasDedicatedGstCol) {
+              const multiplier = 1 + (p.gst || 0) / 100;
+              row.getCell(safeAmountCol).value = {
+                formula: `${qtyColLetter}${rNumber}*${rateColLetter}${rNumber}*${multiplier}`,
+                result: p.amount * multiplier,
+              };
+            } else {
+              row.getCell(safeAmountCol).value = {
+                formula: `${qtyColLetter}${rNumber}*${rateColLetter}${rNumber}`,
+                result: p.amount,
+              };
+            }
           } else {
-            row.getCell(safeAmountCol).value = p.amount;
+            if (!hasDedicatedGstCol) {
+              row.getCell(safeAmountCol).value = p.amount * (1 + (p.gst || 0) / 100);
+            } else {
+              row.getCell(safeAmountCol).value = p.amount;
+            }
           }
         } else {
           // Thoroughly wipe all dummy template sample cells in unused rows across columns 1 to 25
@@ -6237,31 +10867,72 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
       // 6. Automatically Recalculate Totals & Formulas
       const actualEndRow = dataStartRowIndex + Math.max(itemsCount, sampleRowCount) - 1;
       const amtColLetter = worksheet.getColumn(safeAmountCol).letter;
+      const valCol = mapping.totals?.valueColumnIndex || safeAmountCol;
 
-      if (mapping.totals.subtotalRowIndex) {
-        const subRow = worksheet.getRow(mapping.totals.subtotalRowIndex + rowOffset);
-        subRow.getCell(mapping.totals.valueColumnIndex).value = {
+      if (activeSubtotalRow) {
+        const subRow = worksheet.getRow(activeSubtotalRow + rowOffset);
+        subRow.getCell(valCol).value = {
           formula: `SUM(${amtColLetter}${dataStartRowIndex}:${amtColLetter}${actualEndRow})`,
           result: model.totals.subtotal,
         };
       }
 
-      if (mapping.totals.discountRowIndex && model.discount.value > 0) {
-        const discRow = worksheet.getRow(mapping.totals.discountRowIndex + rowOffset);
-        discRow.getCell(mapping.totals.valueColumnIndex).value = -model.discount.value;
+      if (activeDiscountRow && model.discount.value > 0) {
+        const discRow = worksheet.getRow(activeDiscountRow + rowOffset);
+        discRow.getCell(valCol).value = -model.discount.value;
       }
 
-      if (mapping.totals.taxRowIndex) {
-        const taxRow = worksheet.getRow(mapping.totals.taxRowIndex + rowOffset);
-        taxRow.getCell(mapping.totals.valueColumnIndex).value = model.gstTotal;
+      if (activeTaxRow) {
+        const taxRow = worksheet.getRow(activeTaxRow + rowOffset);
+        taxRow.getCell(valCol).value = model.gstTotal;
       }
 
-      if (mapping.totals.totalRowIndex) {
-        const totRow = worksheet.getRow(mapping.totals.totalRowIndex + rowOffset);
-        totRow.getCell(mapping.totals.valueColumnIndex).value = model.totals.payable;
+      if (activeTotalRow) {
+        const totRow = worksheet.getRow(activeTotalRow + rowOffset);
+        totRow.getCell(valCol).value = model.totals.payable;
+      } else {
+        // Fallback: Grand total not found anywhere in template, append two new rows after last data row
+        totalsRowsMissingInTemplate = true;
+
+        const refRow = worksheet.getRow(actualEndRow);
+        worksheet.spliceRows(actualEndRow + 1, 0, [], []);
+        
+        const taxRow = worksheet.getRow(actualEndRow + 1);
+        const totalRow = worksheet.getRow(actualEndRow + 2);
+        taxRow.height = refRow.height || 20;
+        totalRow.height = refRow.height || 20;
+
+        refRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+          const taxCell = taxRow.getCell(colIdx);
+          const totalCell = totalRow.getCell(colIdx);
+          if (cell.style) {
+            taxCell.style = Object.assign({}, cell.style);
+            totalCell.style = Object.assign({}, cell.style);
+          }
+          if (cell.numFmt) {
+            taxCell.numFmt = cell.numFmt;
+            totalCell.numFmt = cell.numFmt;
+          }
+        });
+
+        const labelCol = Math.max(1, safeAmountCol - 1);
+        const taxLabelCell = taxRow.getCell(labelCol);
+        const taxValueCell = taxRow.getCell(safeAmountCol);
+        taxLabelCell.value = "Tax (GST):";
+        taxLabelCell.alignment = { ...taxLabelCell.alignment, horizontal: "right" };
+        taxValueCell.value = model.gstTotal;
+
+        const totalLabelCell = totalRow.getCell(labelCol);
+        const totalValueCell = totalRow.getCell(safeAmountCol);
+        totalLabelCell.value = "Total Payable:";
+        totalLabelCell.font = { ...totalLabelCell.font, bold: true };
+        totalLabelCell.alignment = { ...totalLabelCell.alignment, horizontal: "right" };
+        totalValueCell.value = model.totals.payable;
+        totalValueCell.font = { ...totalValueCell.font, bold: true };
       }
 
       // 7. Comprehensive Section & Placeholder Scanner
+      let termsInjected = false;
       for (let r = 1; r <= (worksheet.rowCount || 100); r++) {
         const row = worksheet.getRow(r);
         const isHeaderArea = r < headerRowIndex;
@@ -6274,7 +10945,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
           const lower = text.toLowerCase().trim();
           const upper = text.toUpperCase().trim();
 
-          // â”€â”€ COMPANY PLACEHOLDERS (Rows 1 to Company boundary) â”€â”€
+          // ── COMPANY PLACEHOLDERS (Rows 1 to Company boundary) ──
           if (isCompanySection) {
             if (fuzzyMatch(text, ["your company name", "company name", "your company", "[company name]"])) {
               cell.value = model.company.name;
@@ -6298,28 +10969,61 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
             }
           }
 
-          // â”€â”€ CLIENT / CUSTOMER PLACEHOLDERS (Header area below company boundary) â”€â”€
-          if (isHeaderArea && !isCompanySection) {
-            if (fuzzyMatch(text, ["client name", "customer name", "party name", "buyer name", "[name]", "recipient name", "[company name]"])) {
+          // ── CLIENT / CUSTOMER PLACEHOLDERS (Header area below company boundary) ──
+          if (!hasAiClientDetails && isHeaderArea && !isCompanySection) {
+            const trimmedText = text.trim();
+
+            // New detection pattern: Short labels ending in a colon (e.g., "M/s:", "To:", "Bill To:", "Address:")
+            if (trimmedText.endsWith(":") && trimmedText.length <= 35) {
+              const labelNoColon = trimmedText.slice(0, -1).trim();
+              let targetValue = "";
+
+              if (fuzzyMatch(labelNoColon, ["client name", "customer name", "party name", "buyer name", "[name]", "recipient name", "[company name]", "m/s", "to", "bill to", "billed to", "ship to", "consignee", "kind attn", "attn", "party", "customer", "name"])) {
+                targetValue = model.customer.name;
+              } else if (fuzzyMatch(labelNoColon, ["street address", "client address", "address line 1", "address", "[street address]", "delivery address", "billing address"])) {
+                targetValue = model.customer.address || "N/A";
+              } else if (fuzzyMatch(labelNoColon, ["city, state, country", "city state country", "city, state", "[city, st zip]", "st zip", "[city, state, zip]", "gstin", "gst no", "gst number", "tax id", "gst"])) {
+                targetValue = model.customer.gstNumber ? (labelNoColon.toUpperCase().includes("GST") ? model.customer.gstNumber : `GSTIN: ${model.customer.gstNumber}`) : "";
+              } else if (fuzzyMatch(labelNoColon, ["phone", "phone number", "mobile", "contact", "tel", "email", "[phone]", "[000-000-0000]", "mob", "contact no", "cell"])) {
+                const contactParts = [model.customer.phone, model.customer.email].filter(Boolean);
+                targetValue = contactParts.length > 0 ? (labelNoColon.toUpperCase().includes("PHONE") || labelNoColon.toUpperCase().includes("MOB") || labelNoColon.toUpperCase().includes("TEL") || labelNoColon.toUpperCase().includes("CELL") ? (contactParts[0] || "") : `Phone: ${contactParts.join(" | ")}`) : "";
+              }
+
+              if (targetValue) {
+                const rightCell = row.getCell(colIdx + 1);
+                const belowRow = worksheet.getRow(r + 1);
+                const belowCell = belowRow ? belowRow.getCell(colIdx) : null;
+
+                if (isBlankOrPlaceholder(rightCell.value)) {
+                  rightCell.value = targetValue;
+                  return;
+                } else if (belowCell && isBlankOrPlaceholder(belowCell.value)) {
+                  belowCell.value = targetValue;
+                  return;
+                }
+              }
+            }
+
+            if (fuzzyMatch(text, ["client name", "customer name", "party name", "buyer name", "[name]", "recipient name", "[company name]", "m/s", "to,", "bill to", "billed to", "ship to", "consignee", "kind attn", "attn", "party", "customer"])) {
               cell.value = model.customer.name;
               return;
             }
-            if (fuzzyMatch(text, ["street address", "client address", "address line 1", "address", "[street address]"])) {
+            if (fuzzyMatch(text, ["street address", "client address", "address line 1", "address", "[street address]", "delivery address", "billing address"])) {
               cell.value = model.customer.address || "N/A";
               return;
             }
-            if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "[city, st zip]", "st zip", "[city, state, zip]"])) {
+            if (fuzzyMatch(text, ["city, state, country", "city state country", "city, state", "[city, st zip]", "st zip", "[city, state, zip]", "gstin", "gst no", "gst number", "tax id"])) {
               cell.value = model.customer.gstNumber ? `GSTIN: ${model.customer.gstNumber}` : "";
               return;
             }
-            if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact", "tel", "email", "[phone]", "[000-000-0000]"])) {
+            if (fuzzyMatch(text, ["phone", "phone number", "mobile", "contact", "tel", "email", "[phone]", "[000-000-0000]", "mob", "contact no", "cell"])) {
               const contactParts = [model.customer.phone, model.customer.email].filter(Boolean);
               cell.value = contactParts.length > 0 ? `Phone: ${contactParts.join(" | ")}` : "";
               return;
             }
           }
 
-          // â”€â”€ UNIVERSAL PLACEHOLDERS (Date, Quote #, Customer ID, Terms) â”€â”€
+          // ── UNIVERSAL PLACEHOLDERS (Date, Quote #, Customer ID, Terms) ──
           if (lower === "mm/dd/yyyy" || lower === "dd/mm/yyyy" || lower === "yyyy-mm-dd" || lower === "[date]") {
             cell.value = model.date;
             return;
@@ -6341,9 +11045,83 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
           }
 
           if (r > headerRowIndex) {
-            if (fuzzyMatch(text, ["enter your terms", "terms and conditions here", "special notes and instructions", "thank you for your business"])) {
-              cell.value = brand.terms || "Thank you for your business!";
-              return;
+            const termsRegex = /terms\s*(&|and)?\s*condition|^terms:?$|\bt\s*&\s*c\b/i;
+            const isTermsPhrase = fuzzyMatch(text, ["enter your terms", "terms and conditions here", "special notes and instructions", "thank you for your business"]);
+            
+            if (termsRegex.test(text) || isTermsPhrase) {
+              if (termsInjected) {
+                if (/thank\s*you/i.test(text)) {
+                  cell.value = "Thank you for your business!";
+                } else {
+                  cell.value = null;
+                }
+                return;
+              }
+              termsInjected = true;
+
+              const termsText = brand.terms || "Standard delivery and quotation terms apply.";
+              const isHeadingLabel = text.length < 30 && !/enter|here|instruction|thank you/i.test(text);
+
+              if (!isHeadingLabel) {
+                // Long cell (or explicit placeholder instructional text): replace directly
+                cell.value = termsText;
+                return;
+              } else {
+                // Short heading label: leave heading alone and examine rows immediately below it
+                let replaced = false;
+                for (let nextOffset = 1; nextOffset <= 4; nextOffset++) {
+                  const targetRowIdx = r + nextOffset;
+                  if (targetRowIdx > (worksheet.rowCount || targetRowIdx + 4)) break;
+                  const nextRow = worksheet.getRow(targetRowIdx);
+
+                  let hitOtherSection = false;
+                  let targetCell: any = null;
+
+                  nextRow.eachCell({ includeEmpty: false }, (c) => {
+                    const cText = getCellText(c.value).trim();
+                    if (cText) {
+                      if (/^(BANK|ACCOUNT|IFSC|SIGNATURE|AUTHORISED|FOR\s+|NOTE:|THANK)/i.test(cText)) {
+                        hitOtherSection = true;
+                      } else if (!targetCell) {
+                        targetCell = c;
+                      }
+                    }
+                  });
+
+                  if (hitOtherSection) {
+                    if (!replaced) {
+                      // Another section begins right away; insert a row for terms
+                      worksheet.spliceRows(targetRowIdx, 0, []);
+                      const newRow = worksheet.getRow(targetRowIdx);
+                      newRow.getCell(colIdx).value = termsText;
+                      replaced = true;
+                    }
+                    break;
+                  }
+
+                  if (!targetCell) {
+                    // Empty row immediately below heading
+                    if (!replaced) {
+                      nextRow.getCell(colIdx).value = termsText;
+                      replaced = true;
+                    }
+                  } else {
+                    // Row has text (placeholder/demo content)
+                    if (!replaced) {
+                      targetCell.value = termsText;
+                      replaced = true;
+                    } else {
+                      // Clear subsequent lines of placeholder demo terms so old terms don't remain below new ones
+                      targetCell.value = null;
+                    }
+                  }
+                }
+
+                if (!replaced) {
+                  worksheet.getRow(r + 1).getCell(colIdx).value = termsText;
+                }
+                return;
+              }
             }
           }
 
@@ -6377,9 +11155,17 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
         });
       }
 
+      const warnings: string[] = [];
+      if (noGstColumnDetected) {
+        warnings.push("Your uploaded template has no dedicated GST column — GST was included directly in the Amount column instead.");
+      }
+      if (totalsRowsMissingInTemplate) {
+        warnings.push("Your uploaded template's Grand Total row wasn't detected — totals were added as new rows at the bottom.");
+      }
+
       const outBuffer = await workbook.xlsx.writeBuffer();
       triggerDownload(outBuffer, fileName);
-      return;
+      return { warnings };
     } catch (err: any) {
       console.error("High-fidelity custom Excel export failed:", err);
       // If validation error, rethrow so UI can display it
@@ -6390,7 +11176,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
     }
   }
 
-  // â”€â”€ Default Structured Styled Excel Generation (using ExcelJS) â”€â”€
+  // ── Default Structured Styled Excel Generation (using ExcelJS) ──
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Quotation");
 
@@ -6410,7 +11196,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
   worksheet.addRow([]);
 
   // Table Header
-  const headerRow = worksheet.addRow(["SR NO", "PRODUCT DESCRIPTION", "SKU", "QTY", "RATE (â‚¹)", "GST %", "AMOUNT (â‚¹)"]);
+  const headerRow = worksheet.addRow(["SR NO", "PRODUCT DESCRIPTION", "SKU", "QTY", "RATE (₹)", "GST %", "AMOUNT (₹)"]);
   headerRow.eachCell((cell) => {
     cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
     cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2563EB" } };
@@ -6422,9 +11208,9 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
     const row = worksheet.addRow([idx + 1, p.product, p.sku, p.qty, p.rate, `${p.gst}%`, p.amount]);
     row.getCell(1).alignment = { horizontal: "center" };
     row.getCell(4).alignment = { horizontal: "center" };
-    row.getCell(5).numFmt = "â‚¹#,##0.00";
+    row.getCell(5).numFmt = "₹#,##0.00";
     row.getCell(6).alignment = { horizontal: "center" };
-    row.getCell(7).numFmt = "â‚¹#,##0.00";
+    row.getCell(7).numFmt = "₹#,##0.00";
   });
 
   worksheet.addRow([]);
@@ -6434,7 +11220,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
     const r = worksheet.addRow(["", "", "", "", "", label, val]);
     r.getCell(6).font = { bold };
     r.getCell(7).font = { bold };
-    r.getCell(7).numFmt = "â‚¹#,##0.00";
+    r.getCell(7).numFmt = "₹#,##0.00";
   };
 
   addTotalRow("Subtotal:", model.totals.subtotal);
@@ -6446,7 +11232,7 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
 
   worksheet.addRow([]);
   worksheet.addRow([]);
-  
+
   if (model.company.bankAccount) {
     worksheet.addRow(["Bank Details:"]).font = { bold: true };
     const bankLines = model.company.bankAccount.split("\n");
@@ -6472,16 +11258,293 @@ export async function downloadQuotationExcel(payload: ExcelPayload): Promise<voi
 
   const outBuffer = await workbook.xlsx.writeBuffer();
   triggerDownload(outBuffer, fileName);
+  return { warnings: [] };
+}
+```
+
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\lib\quotationEngine\types.ts
+
+```tsx
+import type { ExcelPayload } from "@/lib/excel";
+
+export type QuotationEngineType = "legacy" | "exceljs";
+
+export interface QuotationEngineMapping {
+  productStartRow: number;
+  productColumn: number;
+  qtyColumn: number;
+  priceColumn: number;
+  gstColumn?: number;
+  amountColumn: number;
+  customerNameCell?: { row: number; col: number };
+  addressCell?: { row: number; col: number };
+  quotationNumberCell?: { row: number; col: number };
+  dateCell?: { row: number; col: number };
 }
 
-``n
+export interface PreExportValidationResult {
+  valid: boolean;
+  missingProduct: boolean;
+  missingQuantity: boolean;
+  invalidPrice: boolean;
+  brokenFormula: boolean;
+  missingMapping: boolean;
+  invalidTemplate: boolean;
+  errors: string[];
+}
+
+export interface QuotationEngineResponse {
+  warnings: string[];
+}
+```
+
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\lib\constants.ts
+
+```tsx
+/* ──────────────────────────────────────────────
+   QuoteAI — Constants & Mock Data
+   ────────────────────────────────────────────── */
+
+import type {
+  NavItem,
+  QuoteItem,
+  BrandSettings,
+  CompanySettings,
+  Customer,
+  FollowUp,
+  Product,
+  AppNotification,
+  Task,
+  AIStep,
+  ReviewCheckItem,
+  StatData,
+  Quotation,
+  TimelineEvent,
+} from "@/types";
+
+// ── Navigation ──────────────────────────────
+
+export const NAV_ITEMS: NavItem[] = [
+  { name: "Overview", icon: "⌂" },
+  { name: "OCR Hub", icon: "📄", badge: "NEW" },
+  { name: "Quotations", icon: "▣" },
+  { name: "Products", icon: "◈" },
+  { name: "Follow-ups", icon: "◷", badge: 3 },
+  { name: "Analytics", icon: "⌁" },
+  { name: "AI Marketing", icon: "📣" },
+];
+
+// ── Default Brand ───────────────────────────
+
+export const DEFAULT_BRAND: BrandSettings = {
+  name: "Medline Systems",
+  accent: "#7052d7",
+  terms: "Prices are valid for 15 days. Delivery within 7 working days.",
+  templateStyle: "modern",
+};
+
+export const DEFAULT_COMPANY: CompanySettings = {
+  name: "Medline Systems",
+  gstNumber: "27AABCM4521A1Z5",
+  email: "sales@medlinesystems.in",
+  defaultGst: "12%",
+  bankAccount: "HDFC Bank · •••• 8821",
+  businessDescription: "",
+};
+
+// ── Dashboard Stats ─────────────────────────
+
+export const DASHBOARD_STATS: StatData[] = [
+  { icon: "▣", label: "Total quotations", value: "128", change: "12.5%", positive: true },
+  { icon: "₹", label: "Quoted value", value: "₹ 18.4L", change: "8.2%", positive: true },
+  { icon: "◷", label: "Pending follow-ups", value: "14", change: "3 need attention" },
+  { icon: "♙", label: "Active customers", value: "86", change: "6 new this month", positive: true },
+];
+
+// ── Initial Quote Items ─────────────────────
+
+export const INITIAL_QUOTE_ITEMS: QuoteItem[] = [
+  { id: 1, product: "Digital Blood Pressure Monitor", sku: "MED-BP-001", qty: 12, rate: 1850, gst: 12, confidence: 97, aiReason: "Exact alias match from inventory", matchedFrom: "BP Machine" },
+  { id: 2, product: "Pulse Oximeter Pro", sku: "MED-PO-024", qty: 8, rate: 1240, gst: 12, confidence: 94, aiReason: "Alias matched: pulse oxymeter → Pulse Oximeter Pro", matchedFrom: "pulse oxymeter" },
+  { id: 3, product: "Infrared Thermometer", sku: "MED-IT-017", qty: 15, rate: 890, gst: 5, confidence: 99, aiReason: "Direct product name match", matchedFrom: "infrared thermometer" },
+];
+
+// ── Products Catalog ────────────────────────
+
+export const PRODUCTS: Product[] = [
+  { id: "p1", name: "Digital Blood Pressure Monitor", sku: "MED-BP-001", brand: "Omron", supplier: "MedEquip India", warranty: "2 years", gst: 12, rate: 1850, stock: 45, barcode: "8901234567001", category: "Diagnostics", compatibleProducts: ["p5"], replacementProducts: ["p6"] },
+  { id: "p2", name: "Pulse Oximeter Pro", sku: "MED-PO-024", brand: "BPL Medical", supplier: "BPL Direct", warranty: "1 year", gst: 12, rate: 1240, stock: 32, barcode: "8901234567002", category: "Diagnostics" },
+  { id: "p3", name: "Infrared Thermometer", sku: "MED-IT-017", brand: "Dr. Trust", supplier: "HealthKart B2B", warranty: "1 year", gst: 5, rate: 890, stock: 78, barcode: "8901234567003", category: "Diagnostics" },
+  { id: "p4", name: "Nebulizer Compressor", sku: "MED-NB-009", brand: "Philips", supplier: "Philips Healthcare", warranty: "2 years", gst: 12, rate: 2450, stock: 18, barcode: "8901234567004", category: "Respiratory" },
+  { id: "p5", name: "Stethoscope Classic III", sku: "MED-ST-003", brand: "Littmann", supplier: "3M India", warranty: "5 years", gst: 12, rate: 6800, stock: 12, barcode: "8901234567005", category: "Diagnostics" },
+  { id: "p6", name: "Automatic BP Monitor Advanced", sku: "MED-BP-002", brand: "Omron", supplier: "MedEquip India", warranty: "3 years", gst: 12, rate: 2650, stock: 8, barcode: "8901234567006", category: "Diagnostics", compatibleProducts: ["p5"] },
+  { id: "p7", name: "Surgical Gloves (Box/100)", sku: "MED-SG-041", brand: "Supermax", supplier: "Supermax India", warranty: "N/A", gst: 12, rate: 420, stock: 200, barcode: "8901234567007", category: "Consumables" },
+  { id: "p8", name: "Digital Weighing Scale", sku: "MED-WS-012", brand: "Essae", supplier: "Essae Digitronics", warranty: "1 year", gst: 18, rate: 3200, stock: 5, barcode: "8901234567008", category: "General" },
+  { id: "p9", name: "ECG Machine 12-Channel", sku: "MED-ECG-001", brand: "BPL Medical", supplier: "BPL Direct", warranty: "3 years", gst: 12, rate: 85000, stock: 3, barcode: "8901234567009", category: "Diagnostics" },
+  { id: "p10", name: "Glucometer Kit", sku: "MED-GL-018", brand: "Accu-Chek", supplier: "Roche India", warranty: "2 years", gst: 5, rate: 1350, stock: 0, barcode: "8901234567010", category: "Diagnostics" },
+];
+
+// ── Customers ───────────────────────────────
+
+export const CUSTOMERS: Customer[] = [
+  { id: "c1", name: "Arjun Rao", company: "Sapphire Hospitals", email: "arjun@sapphire.in", phone: "+91 98765 43210", initials: "AR", color: "#fde7d5", totalOrders: 24, totalValue: 840000, lastOrder: "2026-07-20", notes: "Prefers Omron brand for BP monitors." },
+  { id: "c2", name: "Sana Khan", company: "Nova Meditech", email: "sana@nova.in", phone: "+91 98765 43211", initials: "SK", color: "#dbeafe", totalOrders: 18, totalValue: 620000, lastOrder: "2026-07-22", notes: "Usually requests revised quotes within 3 days." },
+  { id: "c3", name: "Vivek Menon", company: "Carewell Clinics", email: "vivek@carewell.in", phone: "+91 98765 43212", initials: "VM", color: "#ede9fe", totalOrders: 31, totalValue: 1120000, lastOrder: "2026-07-18" },
+  { id: "c4", name: "Priya Sharma", company: "CityCare Hospital", email: "priya@citycare.in", phone: "+91 98765 43213", initials: "PS", color: "#dcfce7", totalOrders: 12, totalValue: 450000, lastOrder: "2026-07-24" },
+  { id: "c5", name: "Rahul Verma", company: "LifeLine Diagnostics", email: "rahul@lifeline.in", phone: "+91 98765 43214", initials: "RV", color: "#fef3c7", totalOrders: 8, totalValue: 280000, lastOrder: "2026-07-15" },
+];
+
+// ── Follow-ups ──────────────────────────────
+
+export const FOLLOWUPS: FollowUp[] = [
+  { id: "f1", initials: "AR", color: "#fde7d5", name: "Arjun Rao", company: "Sapphire Hospitals", note: "Quotation sent 5 days ago", action: "Send follow-up", dueDate: "2026-07-24", priority: "high" },
+  { id: "f2", initials: "SK", color: "#dbeafe", name: "Sana Khan", company: "Nova Meditech", note: "Requested a revised quote", action: "Review quote", dueDate: "2026-07-24", priority: "high" },
+  { id: "f3", initials: "VM", color: "#ede9fe", name: "Vivek Menon", company: "Carewell Clinics", note: "Quote expires tomorrow", action: "Send reminder", dueDate: "2026-07-25", priority: "medium" },
+];
+
+// ── Quotation History ───────────────────────
+
+export const QUOTATIONS: Quotation[] = [
+  {
+    id: "QT-2026-0128", customer: "CityCare Hospital", customerId: "c4",
+    items: INITIAL_QUOTE_ITEMS, discount: 5, subtotal: 45066, tax: 4320, total: 45066,
+    status: "sent", versions: [{ version: 1, changes: [], createdAt: "2026-07-24T10:42:00", createdBy: "AI" }],
+    currentVersion: 1, createdAt: "2026-07-24T10:42:00", updatedAt: "2026-07-24T10:42:00", approvalStatus: "approved",
+  },
+  {
+    id: "QT-2026-0127", customer: "Sapphire Hospitals", customerId: "c1",
+    items: [INITIAL_QUOTE_ITEMS[0], INITIAL_QUOTE_ITEMS[2]], discount: 8, subtotal: 124800, tax: 13104, total: 124800,
+    status: "viewed", versions: [{ version: 1, changes: [], createdAt: "2026-07-23T14:30:00", createdBy: "Abhishek" }, { version: 2, changes: [{ field: "discount", oldValue: "5%", newValue: "8%" }], createdAt: "2026-07-23T16:00:00", createdBy: "AI" }],
+    currentVersion: 2, createdAt: "2026-07-23T14:30:00", updatedAt: "2026-07-23T16:00:00", approvalStatus: "approved",
+  },
+  {
+    id: "QT-2026-0126", customer: "Nova Meditech", customerId: "c2",
+    items: [INITIAL_QUOTE_ITEMS[1]], discount: 3, subtotal: 28940, tax: 3217, total: 28940,
+    status: "draft", versions: [{ version: 1, changes: [], createdAt: "2026-07-22T09:15:00", createdBy: "AI" }],
+    currentVersion: 1, createdAt: "2026-07-22T09:15:00", updatedAt: "2026-07-22T09:15:00", approvalStatus: "ai-review",
+  },
+];
+
+// ── Notifications ───────────────────────────
+
+export const NOTIFICATIONS: AppNotification[] = [
+  { id: "n1", type: "quotation-ready", title: "Quotation Ready", message: "QT-2026-0128 for CityCare Hospital is ready for export.", timestamp: "2026-07-24T10:42:00", read: false },
+  { id: "n2", type: "review-required", title: "Review Required", message: "Low confidence match found in QT-2026-0126. Please verify.", timestamp: "2026-07-24T09:30:00", read: false },
+  { id: "n3", type: "low-stock", title: "Low Stock Alert", message: "Glucometer Kit (MED-GL-018) is out of stock.", timestamp: "2026-07-24T08:00:00", read: false },
+  { id: "n4", type: "customer-reply", title: "Customer Reply", message: "Arjun Rao responded to QT-2026-0127.", timestamp: "2026-07-23T16:45:00", read: true },
+  { id: "n5", type: "pending-followup", title: "Follow-up Due", message: "Follow-up with Sana Khan is overdue by 1 day.", timestamp: "2026-07-23T09:00:00", read: true },
+];
+
+// ── Tasks ───────────────────────────────────
+
+export const TASKS: Task[] = [
+  { id: "t1", title: "Review AI-matched products", description: "2 items below 90% confidence need verification", priority: "high", status: "pending", type: "review" },
+  { id: "t2", title: "Follow up with Arjun Rao", description: "Quotation QT-2026-0127 sent 5 days ago — no response", priority: "high", status: "pending", type: "follow-up" },
+  { id: "t3", title: "AI: Offer 6% discount to Carewell", description: "Based on ₹11.2L annual purchase history, recommended discount: 6%", priority: "medium", status: "pending", type: "ai-suggestion" },
+  { id: "t4", title: "Restock Glucometer Kits", description: "Current stock: 0 units. 3 pending quotations include this item.", priority: "high", status: "pending", type: "ai-suggestion" },
+  { id: "t5", title: "Send reminder to Vivek Menon", description: "Quote QT-2026-0125 expires tomorrow", priority: "medium", status: "pending", type: "follow-up" },
+];
+
+// ── AI Timeline Steps ───────────────────────
+
+export const AI_TIMELINE_STEPS: AIStep[] = [
+  { id: "s1", label: "Document uploaded", description: "Customer request received", status: "pending" },
+  { id: "s2", label: "Reading document", description: "AI is analyzing the uploaded content", status: "pending" },
+  { id: "s3", label: "OCR complete", description: "Text extraction finished", status: "pending" },
+  { id: "s4", label: "Extracting products", description: "Identifying product names and quantities", status: "pending" },
+  { id: "s5", label: "Matching inventory", description: "Cross-referencing with product catalog", status: "pending" },
+  { id: "s6", label: "Checking GST", description: "Verifying GST rates for matched products", status: "pending" },
+  { id: "s7", label: "Checking stock", description: "Confirming inventory availability", status: "pending" },
+  { id: "s8", label: "Generating quotation", description: "Building quotation with matched data", status: "pending" },
+  { id: "s9", label: "Reviewing quotation", description: "Running quality checks", status: "pending" },
+  { id: "s10", label: "Quotation ready", description: "Ready for review and export", status: "pending" },
+];
+
+// ── AI Review Checks ────────────────────────
+
+export const AI_REVIEW_CHECKS: ReviewCheckItem[] = [
+  { id: "r1", label: "No duplicate products", description: "All line items are unique", severity: "success", resolved: true },
+  { id: "r2", label: "Quantities verified", description: "All quantities match the customer request", severity: "success", resolved: true },
+  { id: "r3", label: "GST rates correct", description: "GST rates verified against latest schedule", severity: "success", resolved: true },
+  { id: "r4", label: "Confidence above threshold", description: "1 item below 95% confidence — review recommended", severity: "warning", resolved: false },
+  { id: "r5", label: "All products in stock", description: "All items available in current inventory", severity: "success", resolved: true },
+  { id: "r6", label: "Prices current", description: "All prices match the latest rate card", severity: "success", resolved: true },
+  { id: "r7", label: "Margin check", description: "Estimated margin: 19.2% — within acceptable range", severity: "success", resolved: true },
+  { id: "r8", label: "Customer data complete", description: "Customer name, address and GST are present", severity: "success", resolved: true },
+];
+
+// ── Customer Timeline Events ────────────────
+
+export const CUSTOMER_TIMELINE: TimelineEvent[] = [
+  { id: "te1", type: "quotation", title: "Quotation QT-2026-0128 sent", description: "₹45,066 — 3 items including BP monitors", timestamp: "2026-07-24T10:42:00" },
+  { id: "te2", type: "ai-note", title: "AI Note", description: "Customer prefers Omron brand. Last 3 orders included BP monitors.", timestamp: "2026-07-24T10:40:00" },
+  { id: "te3", type: "email", title: "Email sent", description: "Quotation attached and sent to priya@citycare.in", timestamp: "2026-07-24T10:45:00" },
+  { id: "te4", type: "whatsapp", title: "WhatsApp message", description: "\"Hi Priya, sharing the quotation as discussed. Let me know if adjustments are needed.\"", timestamp: "2026-07-24T10:46:00" },
+  { id: "te5", type: "followup", title: "Follow-up scheduled", description: "Auto-scheduled for 3 days after quotation sent", timestamp: "2026-07-24T10:47:00" },
+  { id: "te6", type: "quotation", title: "Quotation QT-2026-0112 accepted", description: "₹32,400 — consumables order", timestamp: "2026-07-10T14:30:00" },
+  { id: "te7", type: "document", title: "Purchase order uploaded", description: "PO-CC-2026-044 received from CityCare procurement", timestamp: "2026-07-11T09:15:00" },
+];
+
+// ── Copilot Suggested Commands ──────────────
+
+export const COPILOT_COMMANDS = [
+  { command: "/price", label: "Adjust pricing", description: "Reduce price by 5%" },
+  { command: "/replace", label: "Replace products", description: "Swap imported products with local alternatives" },
+  { command: "/govt", label: "Government format", description: "Generate government quotation format" },
+  { command: "/premium", label: "Premium format", description: "Generate premium quotation layout" },
+  { command: "/freight", label: "Add freight", description: "Add shipping and freight charges" },
+  { command: "/qty", label: "Update quantity", description: "Increase or decrease item quantities" },
+  { command: "/tender", label: "Summarize tender", description: "Extract and summarize tender details" },
+  { command: "/explain", label: "Explain quotation", description: "Explain pricing and margin breakdown" },
+  { command: "/invoice", label: "Create invoice", description: "Convert quotation to invoice" },
+  { command: "/email", label: "Draft email", description: "Generate a follow-up email" },
+  { command: "/whatsapp", label: "Draft WhatsApp", description: "Generate a WhatsApp message" },
+];
+```
+
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\lib\excel.ts
+
+```tsx
+"use client";
+
+import type { QuoteItem, BrandSettings, CompanySettings, ClientDetails } from "@/types";
+import { dispatchQuotationEngine, quotationEngine, setQuotationEngine } from "./quotationEngine";
+
+export interface ExcelPayload {
+  brand: BrandSettings;
+  company: CompanySettings;
+  items: QuoteItem[];
+  discount: number;
+  tax: number;
+  total: number;
+  quotationId: string;
+  customerName: string;
+  clientDetails?: ClientDetails;
+  date: string;
+}
+
+/**
+ * Dual Quotation Engine Architecture Switch:
+ * Changing quotationEngine between "legacy" and "exceljs" instantly toggles the underlying generator.
+ */
+export { quotationEngine, setQuotationEngine };
+
+/**
+ * Main application export gateway for quotation spreadsheets.
+ * Dispatches to either the High-Fidelity ExcelJS engine (with automatic legacy fallback)
+ * or directly to the legacy engine according to configuration.
+ */
+export async function downloadQuotationExcel(payload: ExcelPayload): Promise<{ warnings: string[] }> {
+  return dispatchQuotationEngine(payload);
+}
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\lib\pdf.ts
 
-`	ypescript
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   QuoteAI â€” PDF Generation with Custom Design
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+```tsx
+/* ──────────────────────────────────────────────
+   QuoteAI — PDF Generation with Custom Design
+   ────────────────────────────────────────────── */
 
 import { jsPDF } from "jspdf";
 import { formatCurrency } from "./utils";
@@ -6504,7 +11567,7 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
   const { brand, company, items, discount, total, quotationId, customerName, clientDetails, date } = payload;
   const pdf = new jsPDF();
 
-  // â”€â”€ Watermark Text â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Watermark Text ──────────────────────────
   if (brand.watermarkText) {
     pdf.saveGraphicsState();
     pdf.setTextColor(240, 240, 245);
@@ -6513,7 +11576,7 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
     pdf.restoreGraphicsState();
   }
 
-  // â”€â”€ Header Bar or Uploaded Custom Letterhead â”€â”€
+  // ── Header Bar or Uploaded Custom Letterhead ──
   if (brand.customHeaderImage) {
     try {
       pdf.addImage(brand.customHeaderImage, 0, 0, 210, 35);
@@ -6569,13 +11632,13 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
     pdf.text(brand.name || "Company Name", 16, 18);
   }
 
-  // â”€â”€ Title â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Title ───────────────────────────────────
   let y = (brand.customHeaderImage || brand.templateStyle === "custom_uploaded") ? 45 : 46;
   pdf.setTextColor(35, 31, 53);
   pdf.setFontSize(18);
   pdf.text("QUOTATION", 16, y);
 
-  // â”€â”€ Meta line & Billed To â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Meta line & Billed To ────────────────
   y += 8;
   pdf.setFontSize(10);
   pdf.setTextColor(105, 99, 120);
@@ -6611,7 +11674,7 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
     pdf.text(`${clientDetails.phone || ""} ${clientDetails.email ? " | " + clientDetails.email : ""}`.trim(), 16, y);
   }
 
-  // â”€â”€ Column headers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Column headers ──────────────────────────
   y += 18;
   pdf.setFillColor(245, 245, 250);
   pdf.rect(16, y - 6, 178, 8, "F");
@@ -6624,7 +11687,7 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
   pdf.setFont("helvetica", "normal");
   y += 8;
 
-  // â”€â”€ Line items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Line items ──────────────────────────────
   items.forEach((item) => {
     if (y > 250) {
       pdf.addPage();
@@ -6644,7 +11707,7 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
     y += Math.max(10, splitTitle.length * 6 + 4);
   });
 
-  // â”€â”€ Discount â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Discount ────────────────────────────────
   if (discount > 0) {
     y += 4;
     pdf.setFontSize(10);
@@ -6653,7 +11716,7 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
     y += 8;
   }
 
-  // â”€â”€ Total â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Total ───────────────────────────────────
   y += 6;
   pdf.setFontSize(11);
   pdf.setTextColor(35, 31, 53);
@@ -6665,7 +11728,7 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
   pdf.setFont("helvetica", "normal");
   y += 18;
 
-  // â”€â”€ Terms & Conditions & Bank â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Terms & Conditions & Bank ────────────────
   if (y > 230) {
     pdf.addPage();
     y = 20;
@@ -6696,7 +11759,7 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
   const splitTerms = pdf.splitTextToSize(brand.terms || "Standard delivery and quotation terms apply.", 120);
   pdf.text(splitTerms, 16, y);
 
-  // â”€â”€ Footer Stamp & Signature â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Footer Stamp & Signature ────────────────
   if (brand.customFooterImage) {
     try {
       // Position stamp on the bottom right
@@ -6707,18 +11770,17 @@ export function downloadQuotationPdf(payload: PdfPayload): void {
     }
   }
 
-  // â”€â”€ Save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Save ────────────────────────────────────
   pdf.save(`OperonAI_Quotation_${quotationId}.pdf`);
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\lib\utils.ts
 
-`	ypescript
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   QuoteAI â€” Shared Utilities
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+```tsx
+/* ──────────────────────────────────────────────
+   QuoteAI — Shared Utilities
+   ────────────────────────────────────────────── */
 
 /** Format a number as INR currency (no decimals). */
 export function formatCurrency(value: number): string {
@@ -6790,7 +11852,7 @@ export function getConfidenceColor(confidence: number): string {
 export function getConfidenceLabel(confidence: number): string {
   if (confidence >= 95) return "High";
   if (confidence >= 80) return "Medium";
-  return "Low â€” Review Required";
+  return "Low — Review Required";
 }
 
 /** Promise-based delay. */
@@ -6806,7 +11868,7 @@ export function clamp(value: number, min: number, max: number): number {
 /** Truncate text to a max length with ellipsis. */
 export function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
-  return text.slice(0, maxLength - 1) + "â€¦";
+  return text.slice(0, maxLength - 1) + "…";
 }
 
 /** Generate a quotation ID like QT-2026-0129. */
@@ -6814,16 +11876,15 @@ export function generateQuotationId(seq: number): string {
   const year = new Date().getFullYear();
   return `QT-${year}-${String(seq).padStart(4, "0")}`;
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\services\api.ts
 
-`	ypescript
+```tsx
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   QuoteAI â€” API & Services
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ──────────────────────────────────────────────
+   QuoteAI — API & Services
+   ────────────────────────────────────────────── */
 
 import {
   PRODUCTS,
@@ -6852,18 +11913,18 @@ import type {
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
 
-// â”€â”€ Config (swap when backend is ready) â”€â”€â”€â”€â”€
+// ── Config (swap when backend is ready) ─────
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 async function _fetchJSON<T>(path: string): Promise<T> {
-  if (!API_BASE) throw new Error("API_BASE not configured â€” using mock data");
+  if (!API_BASE) throw new Error("API_BASE not configured — using mock data");
   const res = await fetch(`${API_BASE}${path}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
 
-// â”€â”€ Products â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Products ────────────────────────────────
 
 export async function fetchTenderAnalysis(tenderId: string) {
   return {};
@@ -7016,7 +12077,7 @@ export async function searchProducts(query: string): Promise<Product[]> {
   );
 }
 
-// â”€â”€ Customers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Customers ───────────────────────────────
 
 export async function getCustomers(): Promise<Customer[]> {
   return CUSTOMERS;
@@ -7026,7 +12087,7 @@ export async function getCustomerById(id: string): Promise<Customer | undefined>
   return CUSTOMERS.find((c) => c.id === id);
 }
 
-// â”€â”€ Quotations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Quotations ──────────────────────────────
 
 export async function getQuotations(): Promise<Quotation[]> {
   return QUOTATIONS;
@@ -7036,31 +12097,31 @@ export async function getQuotationById(id: string): Promise<Quotation | undefine
   return QUOTATIONS.find((q) => q.id === id);
 }
 
-// â”€â”€ Follow-ups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Follow-ups ──────────────────────────────
 
 export async function getFollowUps(): Promise<FollowUp[]> {
   return FOLLOWUPS;
 }
 
-// â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Notifications ───────────────────────────
 
 export async function getNotifications(): Promise<AppNotification[]> {
   return NOTIFICATIONS;
 }
 
-// â”€â”€ Tasks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tasks ───────────────────────────────────
 
 export async function getTasks(): Promise<Task[]> {
   return TASKS;
 }
 
-// â”€â”€ Dashboard Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Dashboard Stats ─────────────────────────
 
 export async function getDashboardStats(): Promise<StatData[]> {
   return DASHBOARD_STATS;
 }
 
-// â”€â”€ Customer Timeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Customer Timeline ───────────────────────
 
 export async function getCustomerTimeline(
   _customerId: string
@@ -7068,7 +12129,7 @@ export async function getCustomerTimeline(
   return CUSTOMER_TIMELINE;
 }
 
-// â”€â”€ Learning System (localStorage for now) â”€â”€
+// ── Learning System (localStorage for now) ──
 
 const CORRECTIONS_KEY = "quoteai_corrections";
 
@@ -7084,7 +12145,7 @@ export function saveCorrection(correction: AICorrection): void {
   localStorage.setItem(CORRECTIONS_KEY, JSON.stringify(existing));
 }
 
-// â”€â”€ Global Search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Global Search ───────────────────────────
 
 export interface SearchResult {
   type: "customer" | "product" | "quotation";
@@ -7108,12 +12169,11 @@ export async function globalSearch(query: string): Promise<SearchResult[]> {
 
   return results;
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\services\brand.ts
 
-`	ypescript
+```tsx
 "use client";
 
 import { DEFAULT_BRAND } from "@/lib/constants";
@@ -7210,12 +12270,11 @@ export function saveBrandSettings(brand: BrandSettings): void {
 
   window.dispatchEvent(new Event("operon_ai_brand_updated"));
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\services\excelAnalyzer.ts
 
-`	ypescript
+```tsx
 "use client";
 
 import ExcelJS from "exceljs";
@@ -7322,7 +12381,13 @@ export async function analyzeExcelTemplate(base64Data: string): Promise<ExcelTem
         if (aiCols.gst) colMap.gst = aiCols.gst;
         if (aiCols.amount) colMap.amount = aiCols.amount;
 
-        if (aiMapping.clientDetailsCoords?.nameRow) {
+        if (
+          aiMapping.clientDetailsCoords &&
+          (aiMapping.clientDetailsCoords.nameRow ||
+            aiMapping.clientDetailsCoords.addressRow ||
+            aiMapping.clientDetailsCoords.gstRow ||
+            aiMapping.clientDetailsCoords.phoneRow)
+        ) {
           clientDetailsCoords = aiMapping.clientDetailsCoords;
         }
         if (aiMapping.quotationNoCoords?.row) {
@@ -7334,7 +12399,7 @@ export async function analyzeExcelTemplate(base64Data: string): Promise<ExcelTem
         if (aiMapping.companyNameCoords?.row) {
           companyNameCoords = aiMapping.companyNameCoords;
         }
-        console.log("âœ… AI Successfully mapped Excel template:", JSON.stringify(aiMapping, null, 2));
+        console.log("✅ AI Successfully mapped Excel template:", JSON.stringify(aiMapping, null, 2));
       }
     } else {
       const errBody = await res.text();
@@ -7378,13 +12443,13 @@ export async function analyzeExcelTemplate(base64Data: string): Promise<ExcelTem
         } else if (/^(QTY|QUANTITY|PIECES|UNITS|NOS|QUANT)/.test(val)) {
           tempColMap.qty = colNumber;
           matchCount++;
-        } else if (/^(RATE|PRICE|UNIT\s*COST|COST|UNIT\s*PRICE|RATE\s*\(â‚¹\)|PRICE\s*\(â‚¹\))/i.test(val)) {
+        } else if (/^(RATE|PRICE|UNIT\s*COST|COST|UNIT\s*PRICE|RATE\s*\(₹\)|PRICE\s*\(₹\))/i.test(val)) {
           tempColMap.rate = colNumber;
           matchCount++;
         } else if (/^(GST|TAX|IGST|CGST|SGST|GST\s*%|TAX\s*%)/.test(val)) {
           tempColMap.gst = colNumber;
           matchCount++;
-        } else if (/^(AMOUNT|TOTAL|VALUE|NET|NET\s*VALUE|TOTAL\s*\(â‚¹\)|AMOUNT\s*\(â‚¹\)|TOTAL\s*PRICE)/.test(val)) {
+        } else if (/^(AMOUNT|TOTAL|VALUE|NET|NET\s*VALUE|TOTAL\s*\(₹\)|AMOUNT\s*\(₹\)|TOTAL\s*PRICE)/.test(val)) {
           tempColMap.amount = colNumber;
           matchCount++;
         }
@@ -7494,18 +12559,17 @@ export async function analyzeExcelTemplate(base64Data: string): Promise<ExcelTem
     companyNameCoords,
   };
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\services\inventory.ts
 
-`	ypescript
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   Operon AI â€” Autonomous Inventory & Company Products Service
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+```tsx
+/* ─────────────────────────────────────────────────────────────────────────────
+   Operon AI — Autonomous Inventory & Company Products Service
+   ─────────────────────────────────────────────────────────────────────────────
    Provides persistent company catalog management via localStorage with
    automatic learning from OCR scans and finalized quotations.
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ───────────────────────────────────────────────────────────────────────────── */
 
 import { PRODUCTS as DEFAULT_PRODUCTS } from "@/lib/constants";
 import type { Product, QuoteItem } from "@/types";
@@ -7652,20 +12716,71 @@ export function autoLearnProductsFromQuoteItems(items: QuoteItem[]): {
     totalCount: getCompanyProducts().length
   };
 }
+```
 
-``n
+## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\services\marketing.ts
+
+```tsx
+/**
+ * Marketing Message Generator Service
+ * Calls /api/generate-marketing-message (Groq / llama-3.3-70b-versatile).
+ */
+
+export interface MarketingMessageResult {
+  message: string;
+  subject?: string; // Only for email channel
+}
+
+export async function generateMarketingMessage(
+  messageIntent: string,
+  channel: "whatsapp" | "email" | "instagram",
+  businessDescription?: string,
+  tone?: string
+): Promise<MarketingMessageResult> {
+  if (!messageIntent.trim()) {
+    throw new Error("Please describe what message you want before generating.");
+  }
+
+  const res = await fetch("/api/generate-marketing-message", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ messageIntent, channel, businessDescription, tone }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    const serverError = data?.error || "An unexpected error occurred. Please try again.";
+    if (serverError.toLowerCase().includes("groq api key")) {
+      throw new Error(
+        "AI Marketing isn't configured — check GROQ_API_KEY in your .env.local file."
+      );
+    }
+    throw new Error(serverError);
+  }
+
+  if (!data.message) {
+    throw new Error("The AI returned an empty response. Please try again.");
+  }
+
+  return {
+    message: data.message as string,
+    subject: data.subject as string | undefined,
+  };
+}
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\services\ocr.ts
 
-`	ypescript
+```tsx
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   Operon AI â€” Autonomous OCR & Document Intelligence Engine
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* ─────────────────────────────────────────────────────────────────────────────
+   Operon AI — Autonomous OCR & Document Intelligence Engine
+   ─────────────────────────────────────────────────────────────────────────────
    Handles real client-side OCR (Tesseract.js for images, PDF text parsing,
    and Spreadsheet parsing via XLSX/PapaParse) + Intelligent AI Semantic Matching
    against inventory catalogs.
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+   ───────────────────────────────────────────────────────────────────────────── */
 
 import { CUSTOMERS } from "@/lib/constants";
 import { getCompanyProducts } from "@/services/inventory";
@@ -7700,15 +12815,15 @@ export interface SampleDocument {
   sampleText: string;
 }
 
-// â”€â”€ 5 Pre-Loaded Realistic Business Documents for 1-Click WOW Testing â”€â”€â”€â”€â”€â”€â”€â”€
+// ── 5 Pre-Loaded Realistic Business Documents for 1-Click WOW Testing ────────
 
 export const SAMPLE_DOCUMENTS: SampleDocument[] = [
   {
     id: "sample-po-apollo",
-    title: "Apollo Hospitals â€” Purchase Order #PO-2026-8891",
+    title: "Apollo Hospitals — Purchase Order #PO-2026-8891",
     category: "Purchase Order",
     subtitle: "Formal hospital requisition for ICU monitoring equipment",
-    icon: "ðŸ¥",
+    icon: "🏥",
     badge: "High Confidence",
     sampleText: `APOLLO HOSPITALS ENTERPRISE LIMITED
 Greams Road, Chennai - 600006 | GSTIN: 33AAACA8812K1Z0
@@ -7725,10 +12840,10 @@ Terms: Delivery required within 7 working days at ICU Central Store. Payment 30 
   },
   {
     id: "sample-wa-dr-mehta",
-    title: "Dr. Mehta Clinic â€” WhatsApp Emergency Inquiry",
+    title: "Dr. Mehta Clinic — WhatsApp Emergency Inquiry",
     category: "WhatsApp Inquiry",
     subtitle: "Informal text screenshot requesting immediate ward diagnostic supplies",
-    icon: "ðŸ’¬",
+    icon: "💬",
     badge: "Fuzzy Matched",
     sampleText: `[25/07/26, 10:14 AM] Dr. Rajesh Mehta (Carewell Clinics):
 Hi Medline sales team, we need urgent stock for our new outpatient wing in Andheri.
@@ -7740,10 +12855,10 @@ Also let us know if you have ECG machine 12 channel available for immediate disp
   },
   {
     id: "sample-tender-fortis",
-    title: "Fortis Healthcare â€” Annual Tender Notice #TF-992",
+    title: "Fortis Healthcare — Annual Tender Notice #TF-992",
     category: "Tender Document",
     subtitle: "Multi-item government/corporate tender specification sheet",
-    icon: "ðŸ“‘",
+    icon: "📑",
     badge: "Complex Spec",
     sampleText: `FORTIS HEALTHCARE LIMITED - TENDER SPECIFICATION SHEET
 Tender Ref: TF-992/2026-27 | Due Date: 30-Aug-2026
@@ -7759,10 +12874,10 @@ Note: All vendors must quote standard GST rates and include 2-year warranty comp
   },
   {
     id: "sample-note-handwritten",
-    title: "Dr. Sana â€” Handwritten Ward Requisition Note",
+    title: "Dr. Sana — Handwritten Ward Requisition Note",
     category: "Handwritten Note",
     subtitle: "Scanned handwritten doctor note from Nova Meditech ward",
-    icon: "âœï¸",
+    icon: "✍️",
     badge: "AI Vision Parsed",
     sampleText: `Ward Requisition - Nova Meditech ICU
 24/7/2026
@@ -7777,10 +12892,10 @@ Dr. Sana Khan (Head of Ward)`
   },
   {
     id: "sample-inv-supplier",
-    title: "MedEquip India â€” Supplier Inbound Invoice #INV-4410",
+    title: "MedEquip India — Supplier Inbound Invoice #INV-4410",
     category: "Vendor Invoice",
     subtitle: "Standard vendor billing document for inventory replenishment",
-    icon: "ðŸ§¾",
+    icon: "🧾",
     badge: "Invoice Verified",
     sampleText: `MEDEQUIP INDIA DISTRIBUTORS
 Plot 44, MIDC Industrial Area, Mumbai | GSTIN: 27AABCM1122Q1Z9
@@ -7797,7 +12912,7 @@ Subtotal: 80,750 | GST (12%): 9,690 | Net Payable: INR 90,440.`
   }
 ];
 
-// â”€â”€ Fuzzy & Semantic Product Matching against Catalog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Fuzzy & Semantic Product Matching against Catalog ────────────────────────
 
 export function matchProductToInventory(rawText: string, suggestedRate?: number): {
   product: Product;
@@ -7856,7 +12971,7 @@ export function matchProductToInventory(rawText: string, suggestedRate?: number)
         return {
           product: p,
           confidence: 88,
-          reason: `AI semantic alias matched '${alias}' â†’ ${p.name}`,
+          reason: `AI semantic alias matched '${alias}' → ${p.name}`,
           matchedFrom: rawText
         };
       }
@@ -7899,7 +13014,7 @@ export function matchProductToInventory(rawText: string, suggestedRate?: number)
   };
 }
 
-// â”€â”€ NLP Text Parser to Extract Structured Data from Raw OCR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── NLP Text Parser to Extract Structured Data from Raw OCR ──────────────────
 
 export function parseOcrTextToStructuredResult(rawText: string, filename = "Scanned Document", fileType: "image" | "pdf" | "spreadsheet" | "text" = "text"): OCRDocumentResult {
   const text = rawText.trim();
@@ -7968,7 +13083,7 @@ export function parseOcrTextToStructuredResult(rawText: string, filename = "Scan
     const hasNumbers = /\d+/.test(trimmed);
     const hasMedicalWords = /(monitor|oximeter|oxymeter|thermometer|nebulizer|stethoscope|gloves|scale|ecg|glucometer|machine|kit|box|units|pcs|nos|sets)/i.test(trimmed);
 
-    if (hasNumbers && (hasMedicalWords || /^[0-9â€¢*\--]\s*\.?\s*[a-zA-Z]/i.test(trimmed))) {
+    if (hasNumbers && (hasMedicalWords || /^[0-9•*\--]\s*\.?\s*[a-zA-Z]/i.test(trimmed))) {
       // Try to extract quantity
       const qtyMatch = trimmed.match(/(?:qty|quantity|req qty|units|pcs|nos|boxes|sets)?\s*[:=-]?\s*(\d+)\s*(?:units|pcs|nos|boxes|sets|no|qty)/i) || trimmed.match(/\b(\d+)\s*(?:units|pcs|nos|boxes|sets)\b/i) || trimmed.match(/^[0-9]+\.\s*(?:[A-Za-z\s,-]+)\s+(\d+)\s+(?:Nos|Units|Pcs)/i);
       let qty = 1;
@@ -7994,7 +13109,7 @@ export function parseOcrTextToStructuredResult(rawText: string, filename = "Scan
 
       // Clean product text
       const cleanDesc = trimmed
-        .replace(/^[0-9â€¢*\--]\.?\s*/, "") // remove leading bullet/number
+        .replace(/^[0-9•*\--]\.?\s*/, "") // remove leading bullet/number
         .replace(/(?:qty|quantity|req qty|rate|price|inr|rs\.?|units|pcs|nos|boxes|sets|:\s*\d+)/gi, "") // remove labels
         .replace(/[\d,]{3,8}(?:\.\d{2})?/g, "") // remove large numbers
         .replace(/\(\s*\)/g, "")
@@ -8069,7 +13184,7 @@ export function parseOcrTextToStructuredResult(rawText: string, filename = "Scan
   };
 }
 
-// â”€â”€ Real Browser OCR Engine (Tesseract.js / Spreadsheet Reader) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Real Browser OCR Engine (Tesseract.js / Spreadsheet Reader) ──────────────
 
 export async function executeRealOcrOnUploadedFile(
   file: File,
@@ -8196,12 +13311,11 @@ Please supply the following equipment:
   if (onProgress) onProgress(100, "Processing complete!");
   return result;
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\services\quotationModel.ts
 
-`	ypescript
+```tsx
 "use client";
 
 import type { BrandSettings, CompanySettings, QuoteItem, ClientDetails } from "@/types";
@@ -8351,7 +13465,7 @@ export function validateQuotationModel(model: InternalQuotationModel): { valid: 
         errors.push(`${label} has an invalid or zero quantity (${p.qty}).`);
       }
       if (p.rate === undefined || p.rate < 0 || isNaN(p.rate)) {
-        errors.push(`${label} has an invalid price (â‚¹${p.rate}).`);
+        errors.push(`${label} has an invalid price (₹${p.rate}).`);
       }
     });
   }
@@ -8365,12 +13479,11 @@ export function validateQuotationModel(model: InternalQuotationModel): { valid: 
     errors,
   };
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\services\quotations.ts
 
-`	ypescript
+```tsx
 "use client";
 
 import { QUOTATIONS } from "@/lib/constants";
@@ -8440,27 +13553,25 @@ export function updateQuotation(updatedQuote: Quotation): Quotation[] {
   }
   return updated;
 }
-
-``n
+```
 
 ## File: C:\Users\Pratik Kumar\Documents\operon AI\quoteai\src\types\index.ts
 
-`	ypescript
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   QuoteAI â€” Central Type Definitions
-   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+```tsx
+/* ──────────────────────────────────────────────
+   QuoteAI — Central Type Definitions
+   ────────────────────────────────────────────── */
 
-// â”€â”€ Navigation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Navigation ──────────────────────────────
 
 export type ActiveView =
   | "Overview"
   | "OCR Hub"
-  | "AI Workspace"
   | "Quotations"
-  | "Customers"
   | "Products"
   | "Follow-ups"
-  | "Analytics";
+  | "Analytics"
+  | "AI Marketing";
 
 export interface NavItem {
   name: ActiveView;
@@ -8468,15 +13579,15 @@ export interface NavItem {
   badge?: number | string;
 }
 
-// â”€â”€ Tool modals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tool modals ─────────────────────────────
 
 export type ToolType = "scan" | "design" | "settings" | null;
 
-// â”€â”€ Theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Theme ───────────────────────────────────
 
 export type Theme = "light" | "dark";
 
-// â”€â”€ Brand / Company â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Brand / Company ─────────────────────────
 
 export interface ExcelTemplateMapping {
   sheetName: string;
@@ -8546,9 +13657,10 @@ export interface CompanySettings {
   email: string;
   defaultGst: string;
   bankAccount: string;
+  businessDescription?: string;
 }
 
-// â”€â”€ Products â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Products ────────────────────────────────
 
 export interface Product {
   id: string;
@@ -8577,7 +13689,7 @@ export interface ProductAlternative {
   priceDifference: number;
 }
 
-// â”€â”€ Quote Items â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Quote Items ─────────────────────────────
 
 export interface QuoteItem {
   id: number;
@@ -8600,7 +13712,7 @@ export interface ClientDetails {
   gstNumber?: string;
 }
 
-// â”€â”€ Customers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Customers ───────────────────────────────
 
 export interface Customer {
   id: string;
@@ -8618,7 +13730,7 @@ export interface Customer {
   notes?: string;
 }
 
-// â”€â”€ Quotations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Quotations ──────────────────────────────
 
 export type QuotationStatus =
   | "draft"
@@ -8667,7 +13779,7 @@ export interface Quotation {
   approvalStatus: ApprovalStatus;
 }
 
-// â”€â”€ Follow-ups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Follow-ups ──────────────────────────────
 
 export interface FollowUp {
   id: string;
@@ -8681,7 +13793,7 @@ export interface FollowUp {
   priority: "high" | "medium" | "low";
 }
 
-// â”€â”€ AI Pipeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── AI Pipeline ─────────────────────────────
 
 export type AIStepStatus = "pending" | "running" | "complete" | "error";
 
@@ -8704,7 +13816,7 @@ export interface ReviewCheckItem {
   resolved: boolean;
 }
 
-// â”€â”€ AI Copilot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── AI Copilot ──────────────────────────────
 
 export interface CopilotMessage {
   id: string;
@@ -8714,7 +13826,7 @@ export interface CopilotMessage {
   command?: string;
 }
 
-// â”€â”€ Notifications â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Notifications ───────────────────────────
 
 export type NotificationType =
   | "low-stock"
@@ -8733,7 +13845,7 @@ export interface AppNotification {
   read: boolean;
 }
 
-// â”€â”€ Tender â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tender ──────────────────────────────────
 
 export interface TenderProduct {
   name: string;
@@ -8752,7 +13864,7 @@ export interface TenderData {
   importantDates: { label: string; date: string }[];
 }
 
-// â”€â”€ Customer Timeline â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Customer Timeline ───────────────────────
 
 export type TimelineEventType =
   | "quotation"
@@ -8771,7 +13883,7 @@ export interface TimelineEvent {
   metadata?: Record<string, string>;
 }
 
-// â”€â”€ Learning System â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Learning System ─────────────────────────
 
 export interface AICorrection {
   id: string;
@@ -8781,7 +13893,7 @@ export interface AICorrection {
   timestamp: string;
 }
 
-// â”€â”€ Dashboard Stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Dashboard Stats ─────────────────────────
 
 export interface StatData {
   icon: string;
@@ -8791,7 +13903,7 @@ export interface StatData {
   positive?: boolean;
 }
 
-// â”€â”€ Tasks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Tasks ───────────────────────────────────
 
 export type TaskPriority = "high" | "medium" | "low";
 export type TaskStatus = "pending" | "in-progress" | "done";
@@ -8806,7 +13918,7 @@ export interface Task {
   dueDate?: string;
 }
 
-// â”€â”€ Excel Workflow â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Excel Workflow ──────────────────────────
 
 export interface ExcelChange {
   row: number;
@@ -8815,6 +13927,5 @@ export interface ExcelChange {
   newValue: string;
   profitImpact: number;
 }
-
-``n
+```
 

@@ -18,7 +18,6 @@ const QUICK_ACTIONS: {
   type: "action" | "nav";
 }[] = [
   { type: "action", title: "New Quotation", icon: "✦" },
-  { type: "nav", title: "Go to Customers", icon: "♙", view: "Customers" },
   { type: "nav", title: "Go to Products", icon: "◈", view: "Products" },
   { type: "nav", title: "Go to Quotations", icon: "▣", view: "Quotations" },
   { type: "nav", title: "Go to Analytics", icon: "⌁", view: "Analytics" },
@@ -51,11 +50,11 @@ export function CommandPalette({ onClose, onNavigate }: CommandPaletteProps) {
         title: r.title,
         subtitle: r.subtitle,
         icon: r.type === "customer" ? "♙" : r.type === "product" ? "◈" : "▣",
-        view: (r.type === "customer"
-          ? "Customers"
-          : r.type === "product"
-          ? "Products"
-          : "Quotations") as ActiveView,
+        view: (
+          r.type === "product"
+            ? "Products"
+            : "Quotations"
+        ) as ActiveView,
       }))
     : QUICK_ACTIONS.map((a) => ({
         title: a.title,

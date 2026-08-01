@@ -24,12 +24,11 @@ import type {
 export const NAV_ITEMS: NavItem[] = [
   { name: "Overview", icon: "⌂" },
   { name: "OCR Hub", icon: "📄", badge: "NEW" },
-  { name: "AI Workspace", icon: "✦" },
   { name: "Quotations", icon: "▣" },
-  { name: "Customers", icon: "♙" },
   { name: "Products", icon: "◈" },
   { name: "Follow-ups", icon: "◷", badge: 3 },
   { name: "Analytics", icon: "⌁" },
+  { name: "AI Marketing", icon: "📣" },
 ];
 
 // ── Default Brand ───────────────────────────
@@ -47,6 +46,7 @@ export const DEFAULT_COMPANY: CompanySettings = {
   email: "sales@medlinesystems.in",
   defaultGst: "12%",
   bankAccount: "HDFC Bank · •••• 8821",
+  businessDescription: "",
 };
 
 // ── Dashboard Stats ─────────────────────────

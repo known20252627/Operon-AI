@@ -12,16 +12,23 @@ import type { Quotation } from "@/types";
 
 export function RecentQuotations() {
   const [quotesList, setQuotesList] = useState<Quotation[]>([]);
+  const [showAll, setShowAll] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
   const { notify } = useToast();
 
   useEffect(() => {
-    setQuotesList(getQuotations().slice(0, 5));
+    const all = getQuotations();
+    setTotalCount(all.length);
+    setQuotesList(showAll ? all : all.slice(0, 5));
+
     const handleUpdate = () => {
-      setQuotesList(getQuotations().slice(0, 5));
+      const updatedAll = getQuotations();
+      setTotalCount(updatedAll.length);
+      setQuotesList(showAll ? updatedAll : updatedAll.slice(0, 5));
     };
     window.addEventListener("operon_ai_quotations_updated", handleUpdate);
     return () => window.removeEventListener("operon_ai_quotations_updated", handleUpdate);
-  }, []);
+  }, [showAll]);
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -49,7 +56,7 @@ export function RecentQuotations() {
         });
         notify(`📄 Downloaded PDF for ${quote.id}`);
       } else {
-        await downloadQuotationExcel({
+        const res = await downloadQuotationExcel({
           brand,
           company,
           items,
@@ -61,6 +68,7 @@ export function RecentQuotations() {
           date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
         });
         notify(`📊 Downloaded Excel for ${quote.id}`);
+        res?.warnings?.forEach((w) => notify(w));
       }
     } catch (err: any) {
       console.error("Quick download failed:", err);
@@ -69,13 +77,19 @@ export function RecentQuotations() {
   };
 
   return (
-    <section className="panel recent">
-      <div className="panel-head">
+    <section className="panel recent animate-fade-in">
+      <div className="panel-head" style={{ borderBottom: "1px solid var(--line)", paddingBottom: "16px" }}>
         <div>
-          <h3>Recent quotations</h3>
-          <p>Latest activity across your team</p>
+          <h3 style={{ fontSize: "20px", fontWeight: 800 }}>{showAll ? "All Team Quotations" : "Recent Quotations"}</h3>
+          <p style={{ color: "var(--muted)", fontSize: "12px", marginTop: "2px" }}>Latest activity across your sales operations</p>
         </div>
-        <button className="link-button">View all quotations</button>
+        <button
+          className="link-button"
+          onClick={() => setShowAll((prev) => !prev)}
+          style={{ fontWeight: 800, fontSize: "12px", color: "var(--lav)", cursor: "pointer", background: "none", border: "none" }}
+        >
+          {showAll ? "Show recent only (Top 5)" : `View all quotations (${totalCount})`}
+        </button>
       </div>
       <div className="quote-table">
         <div className="table-row table-head">
