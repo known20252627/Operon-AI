@@ -342,54 +342,129 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
   const itemsCount = model.products.length;
   let rowsInserted = 0;
 
-  // Issue 1 & 2: Non-destructive insertion & identical style inheritance
+  // Issue 1 & 2: Non-destructive insertion & exact formatting cloning from previous product row
   if (itemsCount > sampleRowCount) {
     rowsInserted = itemsCount - sampleRowCount;
-    const sampleRefRow = worksheet.getRow(startRow); // Copy strictly from pure sample product row
 
     // Splice new empty rows exactly between product table end and footer start
     worksheet.spliceRows(origEndRow + 1, 0, ...new Array(rowsInserted).fill([]));
 
-    // Deep copy all styling, font, fill, border, height, and number formats
+    const totalCols = Math.max(worksheet.columnCount || 15, 30);
+
+    // Clone formatting directly from the previous product row for every newly inserted row
     for (let i = 1; i <= rowsInserted; i++) {
       const targetRowNumber = origEndRow + i;
+      const prevRowNumber = targetRowNumber - 1;
+      const prevRow = worksheet.getRow(prevRowNumber);
       const targetRow = worksheet.getRow(targetRowNumber);
-      targetRow.height = sampleRefRow.height;
 
-      sampleRefRow.eachCell({ includeEmpty: true }, (cell, colIdx) => {
+      // 1. Copy row height
+      targetRow.height = prevRow.height;
+
+      // Copy cell properties across all columns
+      for (let colIdx = 1; colIdx <= totalCols; colIdx++) {
+        const sourceCell = prevRow.getCell(colIdx);
         const targetCell = targetRow.getCell(colIdx);
-        if (cell.style) {
-          targetCell.style = Object.assign({}, cell.style);
-          if (cell.font) targetCell.font = JSON.parse(JSON.stringify(cell.font));
-          if (cell.fill) targetCell.fill = JSON.parse(JSON.stringify(cell.fill));
-          if (cell.border) targetCell.border = JSON.parse(JSON.stringify(cell.border));
-          if (cell.alignment) targetCell.alignment = JSON.parse(JSON.stringify(cell.alignment));
-        }
-        if (cell.numFmt) targetCell.numFmt = cell.numFmt;
-      });
-    }
 
-    // Replicate merged cells for newly inserted product rows
-    const existingMerges = (worksheet.model.merges || []).slice();
-    existingMerges.forEach((mergeRange) => {
-      const match = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i.exec(mergeRange);
-      if (match) {
-        const startCol = match[1];
-        const mergeStartR = parseInt(match[2], 10);
-        const endCol = match[3];
-        const mergeEndR = parseInt(match[4], 10);
-        if (mergeStartR === startRow && mergeEndR === startRow) {
-          for (let i = 1; i <= rowsInserted; i++) {
-            const tr = origEndRow + i;
-            try {
-              worksheet.mergeCells(`${startCol}${tr}:${endCol}${tr}`);
-            } catch {
-              // ignore if overlap occurs
-            }
-          }
+        // 2. Copy every cell style
+        if (sourceCell.style) {
+          targetCell.style = JSON.parse(JSON.stringify(sourceCell.style));
+        }
+
+        // 3. Copy borders
+        if (sourceCell.border) {
+          targetCell.border = JSON.parse(JSON.stringify(sourceCell.border));
+        }
+
+        // 4. Copy fill colors
+        if (sourceCell.fill) {
+          targetCell.fill = JSON.parse(JSON.stringify(sourceCell.fill));
+        }
+
+        // 5. Copy fonts
+        if (sourceCell.font) {
+          targetCell.font = JSON.parse(JSON.stringify(sourceCell.font));
+        }
+
+        // 6. Copy alignment
+        if (sourceCell.alignment) {
+          targetCell.alignment = JSON.parse(JSON.stringify(sourceCell.alignment));
+        }
+
+        // 7. Copy number formats
+        if (sourceCell.numFmt) {
+          targetCell.numFmt = sourceCell.numFmt;
+        }
+
+        // 8. Copy protection
+        if ((sourceCell as any).protection) {
+          (targetCell as any).protection = JSON.parse(JSON.stringify((sourceCell as any).protection));
         }
       }
-    });
+
+      // 9. Copy conditional formatting where possible
+      try {
+        const condRules = (((worksheet.model as any).conditionalFormattings || (worksheet as any)._conditionalFormattings) || []).slice();
+        condRules.forEach((cf: any) => {
+          if (cf && typeof cf.ref === "string") {
+            const match = /^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/i.exec(cf.ref);
+            if (match) {
+              const startR = parseInt(match[2], 10);
+              const endR = match[4] ? parseInt(match[4], 10) : startR;
+              if (startR <= prevRowNumber && endR >= prevRowNumber) {
+                const newStartCol = match[1];
+                const newEndCol = match[3] || newStartCol;
+                const newRef = match[3] ? `${newStartCol}${targetRowNumber}:${newEndCol}${targetRowNumber}` : `${newStartCol}${targetRowNumber}`;
+                const rulesCopy = cf.rules ? JSON.parse(JSON.stringify(cf.rules)) : [];
+                worksheet.addConditionalFormatting({ ref: newRef, rules: rulesCopy });
+              }
+            }
+          }
+        });
+      } catch {
+        // Ignore if conditional formatting API is unsupported
+      }
+
+      // 10. Copy merged-cell structure if applicable
+      try {
+        const mergeRanges: string[] = [];
+        if (worksheet.model.merges) {
+          mergeRanges.push(...worksheet.model.merges);
+        }
+        if ((worksheet as any)._merges) {
+          Object.values((worksheet as any)._merges).forEach((val: any) => {
+            if (val && val.model) {
+              const m = val.model;
+              const sColLetter = worksheet.getColumn(m.left).letter;
+              const eColLetter = worksheet.getColumn(m.right).letter;
+              const rangeStr = `${sColLetter}${m.top}:${eColLetter}${m.bottom}`;
+              if (!mergeRanges.includes(rangeStr)) {
+                mergeRanges.push(rangeStr);
+              }
+            }
+          });
+        }
+
+        mergeRanges.forEach((mergeRange) => {
+          const match = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i.exec(mergeRange);
+          if (match) {
+            const startCol = match[1];
+            const mergeStartR = parseInt(match[2], 10);
+            const endCol = match[3];
+            const mergeEndR = parseInt(match[4], 10);
+            if (mergeStartR === prevRowNumber && mergeEndR === prevRowNumber) {
+              try {
+                worksheet.mergeCells(`${startCol}${targetRowNumber}:${endCol}${targetRowNumber}`);
+              } catch {
+                // ignore overlap
+              }
+            }
+          }
+        });
+      } catch {
+        // Ignore merge check exceptions
+      }
+    }
   }
 
   const actualEndRow = startRow + Math.max(itemsCount, sampleRowCount) - 1;
@@ -453,6 +528,49 @@ export async function runExcelJSQuotationEngine(payload: ExcelPayload): Promise<
       row.getCell(engineMapping.amountColumn).value = null;
     }
   }
+
+  // Compare inserted row with template row and ensure every cell has identical formatting except for values
+  if (rowsInserted > 0) {
+    const originalTemplateRow = worksheet.getRow(startRow);
+    const maxColumnCount = Math.max(worksheet.columnCount || 15, 30);
+
+    for (let i = 1; i <= rowsInserted; i++) {
+      const insertedRowNum = origEndRow + i;
+      const insertedRow = worksheet.getRow(insertedRowNum);
+
+      if (insertedRow.height !== originalTemplateRow.height) {
+        insertedRow.height = originalTemplateRow.height;
+      }
+
+      for (let colIdx = 1; colIdx <= maxColumnCount; colIdx++) {
+        const templateCell = originalTemplateRow.getCell(colIdx);
+        const insertedCell = insertedRow.getCell(colIdx);
+
+        if (templateCell.style && JSON.stringify(insertedCell.style) !== JSON.stringify(templateCell.style)) {
+          insertedCell.style = JSON.parse(JSON.stringify(templateCell.style));
+        }
+        if (templateCell.font && JSON.stringify(insertedCell.font) !== JSON.stringify(templateCell.font)) {
+          insertedCell.font = JSON.parse(JSON.stringify(templateCell.font));
+        }
+        if (templateCell.fill && JSON.stringify(insertedCell.fill) !== JSON.stringify(templateCell.fill)) {
+          insertedCell.fill = JSON.parse(JSON.stringify(templateCell.fill));
+        }
+        if (templateCell.border && JSON.stringify(insertedCell.border) !== JSON.stringify(templateCell.border)) {
+          insertedCell.border = JSON.parse(JSON.stringify(templateCell.border));
+        }
+        if (templateCell.alignment && JSON.stringify(insertedCell.alignment) !== JSON.stringify(templateCell.alignment)) {
+          insertedCell.alignment = JSON.parse(JSON.stringify(templateCell.alignment));
+        }
+        if (templateCell.numFmt && insertedCell.numFmt !== templateCell.numFmt) {
+          insertedCell.numFmt = templateCell.numFmt;
+        }
+        if ((templateCell as any).protection && JSON.stringify((insertedCell as any).protection) !== JSON.stringify((templateCell as any).protection)) {
+          (insertedCell as any).protection = JSON.parse(JSON.stringify((templateCell as any).protection));
+        }
+      }
+    }
+  }
+
 
   // Issue 3: Automatically update formula ranges across footer & totals
   const amtLetter = worksheet.getColumn(engineMapping.amountColumn).letter;
