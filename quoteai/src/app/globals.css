@@ -1096,16 +1096,30 @@ svg {
    QuoteAI — Global Styles & Design System
    ────────────────────────────────────────────── */
 
+/* Hide scrollbars everywhere for sleek enterprise aesthetics while keeping smooth scroll */
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+* {
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox */
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(28, 23, 58, 0.47);
-  z-index: 10;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  backdrop-filter: blur(5px);
+  background: rgba(15, 23, 42, 0.75);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(8px);
   animation: fade-in 0.2s var(--ease);
+  overflow-y: auto;
 }
 
 .close {
@@ -1132,17 +1146,21 @@ svg {
 
 /* ── Workspace Modal ───────────────────────── */
 
+.workspace-modal,
 .workspace {
-  width: min(980px, 100%);
-  max-height: 92vh;
-  overflow: auto;
-  background: var(--soft);
-  border-radius: 20px;
+  width: min(1340px, 98vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--surface, #18181b);
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+  border-radius: 22px;
   padding: 28px;
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--shadow-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.5));
   animation: modal-slide-up 0.3s var(--ease);
+  position: relative;
 }
 
+[data-theme="dark"] .workspace-modal,
 [data-theme="dark"] .workspace {
   background: var(--surface);
 }

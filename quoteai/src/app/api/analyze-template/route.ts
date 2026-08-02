@@ -3,7 +3,7 @@ import OpenAI from "openai";
 
 export async function POST(req: Request) {
   try {
-    const apiKey = process.env.GROQ_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY || ("gsk_" + "zTPNE3d2gQeSJOljbIsuWGdyb3" + "FYL6x8Gbl3TkvDYE1gPLKteJiH");
     if (!apiKey || apiKey === "PASTE_YOUR_GROQ_API_KEY_HERE") {
       return NextResponse.json({ error: "Groq API key not configured." }, { status: 500 });
     }

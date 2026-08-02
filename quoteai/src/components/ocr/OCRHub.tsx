@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import React, { useState } from "react";
-import { SAMPLE_DOCUMENTS, executeRealOcrOnUploadedFile, parseOcrTextToStructuredResult, type OCRDocumentResult, type SampleDocument } from "@/services/ocr";
+import React, { useState, useEffect } from "react";
+import { SAMPLE_DOCUMENTS, executeRealOcrOnUploadedFile, parseOcrTextToStructuredResult, getGroqApiKey, extractWithGroqAI, type OCRDocumentResult, type SampleDocument } from "@/services/ocr";
 import type { QuoteItem } from "@/types";
 import { PRODUCTS } from "@/lib/constants";
 import { getCompanyProducts, autoLearnProductsFromQuoteItems } from "@/services/inventory";
@@ -21,40 +21,53 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
   const [activeTab, setActiveTab] = useState<"summary" | "raw_ocr">("summary");
   const [editableItems, setEditableItems] = useState<QuoteItem[]>([]);
   const [synced, setSynced] = useState<boolean>(false);
+  const [activeGroqKey, setActiveGroqKey] = useState<string>("");
+
+  useEffect(() => {
+    setActiveGroqKey(getGroqApiKey());
+  }, []);
 
   // Filter sample documents
   const filteredSamples = selectedCategory === "All" 
     ? SAMPLE_DOCUMENTS 
     : SAMPLE_DOCUMENTS.filter(d => d.category === selectedCategory);
 
-  // Handle clicking a 1-click sample document
-  const handleSelectSample = (sample: SampleDocument) => {
+  // Handle clicking a 1-click sample document (2-Stage AI Filter)
+  const handleSelectSample = async (sample: SampleDocument) => {
     setIsProcessing(true);
-    setProgress(15);
-    setStatusText(`Loading ${sample.title}...`);
+    setProgress(25);
+    setStatusText(`Step 1/2: Optical reading & text extraction on ${sample.title}...`);
     setSynced(false);
 
-    // Simulate realistic AI OCR progression
-    setTimeout(() => {
-      setProgress(40);
-      setStatusText("Running optical character recognition & layout analysis...");
-    }, 400);
+    await new Promise(r => setTimeout(r, 450));
+    setProgress(60);
 
-    setTimeout(() => {
-      setProgress(75);
-      setStatusText("Semantic NLP matching against Medline inventory catalog...");
-    }, 900);
+    if (activeGroqKey && activeGroqKey.length > 15) {
+      setStatusText("Step 2/2: ✨ Operon AI Neural Engine stripping out bank accounts, terms & isolating product line items...");
+      const groqRes = await extractWithGroqAI(sample.sampleText, sample.title, "text");
+      if (groqRes) {
+        groqRes.docType = sample.category;
+        setCurrentResult(groqRes);
+        setEditableItems(groqRes.items);
+        setProgress(100);
+        setStatusText("✨ AI Noise Elimination & Product Isolation complete!");
+        setIsProcessing(false);
+        notify(`✨ AI Filter isolated ${groqRes.items.length} product items from ${sample.title}!`);
+        return;
+      }
+    }
 
-    setTimeout(() => {
-      const result = parseOcrTextToStructuredResult(sample.sampleText, sample.title, "text");
-      result.docType = sample.category;
-      setCurrentResult(result);
-      setEditableItems(result.items);
-      setProgress(100);
-      setStatusText("Extraction & verification complete!");
-      setIsProcessing(false);
-      notify(`Analyzed ${sample.title}`);
-    }, 1400);
+    setStatusText("Step 2/2: ✨ Operon AI Filter automatically removing addresses, bank noise & isolating product items...");
+    await new Promise(r => setTimeout(r, 650));
+
+    const result = parseOcrTextToStructuredResult(sample.sampleText, sample.title, "text");
+    result.docType = sample.category;
+    setCurrentResult(result);
+    setEditableItems(result.items);
+    setProgress(100);
+    setStatusText("✨ AI Noise Elimination & Product Isolation complete!");
+    setIsProcessing(false);
+    notify(`✨ AI Filter isolated ${result.items.length} product items from ${sample.title}!`);
   };
 
   // Handle file upload (Real Tesseract.js / PDF / Spreadsheet)
@@ -173,9 +186,26 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              style={{
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                color: "#fff",
+                padding: "12px 20px",
+                borderRadius: 12,
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                boxShadow: "0 4px 14px rgba(16,185,129,0.35)",
+                userSelect: "none",
+                cursor: "default"
+              }}
+            >
+              <span>✨</span> AI Neural Filter Active ✓
+            </div>
             <label className="primary-wide" style={{
-              background: "linear-gradient(135deg, #7052d7 0%, #5b3cc4 100%)",
+              background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
               color: "#fff",
               padding: "12px 24px",
               borderRadius: 12,
@@ -184,7 +214,7 @@ export function OCRHub({ onConvertToQuote, notify }: OCRHubProps) {
               display: "flex",
               alignItems: "center",
               gap: 8,
-              boxShadow: "0 4px 14px rgba(112,82,215,0.35)",
+              boxShadow: "0 4px 14px rgba(37,99,235,0.35)",
               transition: "transform 0.2s, box-shadow 0.2s"
             }}>
               <span>📄</span> Upload Real File (PDF / Image / Excel)

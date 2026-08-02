@@ -7,6 +7,7 @@
 export type ActiveView =
   | "Overview"
   | "OCR Hub"
+  | "Templates"
   | "Quotations"
   | "Products"
   | "Follow-ups"
@@ -367,3 +368,7 @@ export interface ExcelChange {
   newValue: string;
   profitImpact: number;
 }
+
+// ── Quotation Templates ─────────────────────
+export * from "./template";
+

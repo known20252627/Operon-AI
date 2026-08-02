@@ -14,7 +14,7 @@ import { Topbar } from "@/components/layout/Topbar";
 import { HeroCard } from "@/components/dashboard/HeroCard";
 import { StatsGrid } from "@/components/dashboard/StatsGrid";
 import { RevenueChart } from "@/components/dashboard/RevenueChart";
-import { FollowUpsPanel } from "@/components/dashboard/FollowUpsPanel";
+import { OperationalTelemetry } from "@/components/dashboard/OperationalTelemetry";
 import { RecentQuotations } from "@/components/dashboard/RecentQuotations";
 import { TasksWidget } from "@/components/dashboard/TasksWidget";
 import { NotificationCenter } from "@/components/dashboard/NotificationCenter";
@@ -34,6 +34,7 @@ import { addQuotation } from "@/services/quotations";
 // Enterprise Views
 import { ProductsView } from "@/components/products/ProductsView";
 import { QuotationsView } from "@/components/quotation/QuotationsView";
+import { TemplatesView } from "@/components/templates/TemplatesView";
 import { AnalyticsView } from "@/components/analytics/AnalyticsView";
 import { AIMarketingView } from "@/components/marketing/AIMarketingView";
 
@@ -199,7 +200,7 @@ export default function Home() {
             <StatsGrid />
             <section className="dashboard-grid">
               <RevenueChart />
-              <FollowUpsPanel />
+              <OperationalTelemetry />
             </section>
             <TasksWidget />
             <RecentQuotations />
@@ -245,12 +246,12 @@ export default function Home() {
         )}
         {active === "Quotations" && (
           <QuotationsView
-            onOpenDesign={() => setTool("design")}
+            onOpenDesign={() => setActive("Templates")}
             onNewQuote={() => setShowWorkspace(true)}
           />
         )}
+        {active === "Templates" && <TemplatesView />}
         {active === "Products" && <ProductsView />}
-        {active === "Follow-ups" && <FollowUpsPanel expanded />}
         {active === "Analytics" && <AnalyticsView />}
         {active === "AI Marketing" && (
           <AIMarketingView

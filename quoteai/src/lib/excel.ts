@@ -1,7 +1,8 @@
 "use client";
 
 import type { QuoteItem, BrandSettings, CompanySettings, ClientDetails } from "@/types";
-import { dispatchQuotationEngine, quotationEngine, setQuotationEngine } from "./quotationEngine";
+import { generateDeterministicExcel } from "./template";
+import { getDefaultTemplate, markTemplateUsed } from "@/services/template";
 
 export interface ExcelPayload {
   brand: BrandSettings;
@@ -17,16 +18,23 @@ export interface ExcelPayload {
 }
 
 /**
- * Dual Quotation Engine Architecture Switch:
- * Changing quotationEngine between "legacy" and "exceljs" instantly toggles the underlying generator.
- */
-export { quotationEngine, setQuotationEngine };
-
-/**
- * Main application export gateway for quotation spreadsheets.
- * Dispatches to either the High-Fidelity ExcelJS engine (with automatic legacy fallback)
- * or directly to the legacy engine according to configuration.
+ * Enterprise Quotation Gateway:
+ * Immediately generates a pristine, deterministic Excel quotation spreadsheet
+ * using the company's official saved Operon AI template.
  */
 export async function downloadQuotationExcel(payload: ExcelPayload): Promise<{ warnings: string[] }> {
-  return dispatchQuotationEngine(payload);
+  const template = getDefaultTemplate();
+  markTemplateUsed(template.id);
+  
+  return generateDeterministicExcel({
+    quotationId: payload.quotationId,
+    customerName: payload.customerName,
+    clientDetails: payload.clientDetails,
+    date: payload.date,
+    items: payload.items,
+    discount: payload.discount,
+    tax: payload.tax,
+    total: payload.total,
+    template,
+  }, template);
 }

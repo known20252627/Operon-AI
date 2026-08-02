@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import type { Quotation, BrandSettings, CompanySettings } from "@/types";
+import type { QuotationTemplate } from "@/types/template";
 import { ToolModal } from "@/components/ui/Modal";
-import { downloadQuotationPdf } from "@/lib/pdf";
-import { downloadQuotationExcel } from "@/lib/excel";
-import { saveBrandSettings } from "@/services/brand";
-import { DEFAULT_COMPANY } from "@/lib/constants";
+import { generateDeterministicExcel, generateDeterministicPDF } from "@/lib/template";
+import { getTemplates, getDefaultTemplate, markTemplateUsed } from "@/services/template";
 
 interface ExportDesignModalProps {
   selectedQuotes: Quotation[];
@@ -19,89 +18,96 @@ interface ExportDesignModalProps {
 
 export function ExportDesignModal({
   selectedQuotes,
-  brand,
-  company,
   onClose,
   onOpenDesignStudio,
   notify,
 }: ExportDesignModalProps) {
-  const [selectedStyle, setSelectedStyle] = useState<BrandSettings["templateStyle"]>(
-    brand.templateStyle || "modern"
-  );
+  const [templates, setTemplates] = useState<QuotationTemplate[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
   const [isExporting, setIsExporting] = useState(false);
+
+  useEffect(() => {
+    const allTemplates = getTemplates();
+    setTemplates(allTemplates);
+    const def = allTemplates.find((t) => t.isDefault) || allTemplates[0];
+    if (def) {
+      setSelectedTemplateId(def.id);
+    }
+  }, []);
 
   const totalValue = selectedQuotes.reduce((sum, q) => sum + q.total, 0);
 
-  const handleExport = (format: "pdf" | "excel") => {
-    if (selectedQuotes.length === 0) return;
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) || getDefaultTemplate();
+
+  const handlePrintOrPdf = async () => {
+    if (selectedQuotes.length === 0 || !selectedTemplate) return;
     setIsExporting(true);
+    markTemplateUsed(selectedTemplate.id);
 
-    // Apply the chosen design style to the export brand settings
-    const exportBrand: BrandSettings = {
-      ...brand,
-      templateStyle: selectedStyle,
-    };
-
-    // Also persist their design choice as the new default
-    saveBrandSettings(exportBrand);
-
-    setTimeout(async () => {
-      try {
-        for (const quote of selectedQuotes) {
-          if (format === "pdf") {
-            downloadQuotationPdf({
-              brand: exportBrand,
-              company: company,
-              items: quote.items || [],
-              discount: quote.discount || 0,
-              total: quote.total || 0,
-              quotationId: quote.id,
-              customerName: quote.customer,
-              clientDetails: quote.clientDetails,
-              date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
-            });
-          } else {
-            const res = await downloadQuotationExcel({
-              brand: exportBrand,
-              company: company,
-              items: quote.items || [],
-              discount: quote.discount || 0,
-              tax: quote.tax || 0,
-              total: quote.total || 0,
-              quotationId: quote.id,
-              customerName: quote.customer,
-              clientDetails: quote.clientDetails,
-              date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
-            });
-            res?.warnings?.forEach((w) => notify(w));
-          }
-        }
-
-        setIsExporting(false);
-        notify(
-          `🎉 Successfully exported ${selectedQuotes.length} quotation(s) in ${format.toUpperCase()} format using "${
-            selectedStyle === "custom_uploaded"
-              ? "Custom Uploaded Design"
-              : selectedStyle?.toUpperCase()
-          }" layout!`
+    try {
+      for (const quote of selectedQuotes) {
+        await generateDeterministicPDF(
+          {
+            quotationId: quote.id,
+            customerName: quote.customer || "Valued Customer",
+            clientDetails: quote.clientDetails,
+            date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
+            items: quote.items || [],
+            discount: quote.discount || 0,
+            tax: quote.tax || (quote.total * 0.12) / 1.12,
+            total: quote.total || 0,
+            template: selectedTemplate,
+          },
+          selectedTemplate
         );
-        onClose();
-      } catch (err: any) {
-        setIsExporting(false);
-        console.error("Export failed:", err);
-        notify(`⚠️ Export failed: ${err.message || "Please check quotation data"}`);
       }
-    }, 400);
+      notify(`🖨️ Opened high-resolution Print / PDF view using template "${selectedTemplate.name}"!`);
+      onClose();
+    } catch (err: any) {
+      console.error("Print/PDF generation failed:", err);
+      notify(`⚠️ Print/PDF generation failed: ${err.message || "Unknown error"}`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
-  const hasCustomUploads = Boolean(
-    brand.customExcelTemplate || brand.customHeaderImage || brand.customFooterImage || brand.watermarkText
-  );
+  const handleExcelExport = async () => {
+    if (selectedQuotes.length === 0 || !selectedTemplate) return;
+    setIsExporting(true);
+    markTemplateUsed(selectedTemplate.id);
+
+    try {
+      for (const quote of selectedQuotes) {
+        const res = await generateDeterministicExcel(
+          {
+            quotationId: quote.id,
+            customerName: quote.customer || "Valued Customer",
+            clientDetails: quote.clientDetails,
+            date: quote.createdAt || new Date().toLocaleDateString("en-IN"),
+            items: quote.items || [],
+            discount: quote.discount || 0,
+            tax: quote.tax || (quote.total * 0.12) / 1.12,
+            total: quote.total || 0,
+            template: selectedTemplate,
+          },
+          selectedTemplate
+        );
+        res?.warnings?.forEach((w) => notify(w));
+      }
+      notify(`📊 Downloaded deterministic Excel spreadsheet in template "${selectedTemplate.name}"!`);
+      onClose();
+    } catch (err: any) {
+      console.error("Excel export failed:", err);
+      notify(`⚠️ Excel generation failed: ${err.message || "Unknown error"}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <ToolModal
-      title="🎨 Finalize & Export Quotation(s)"
-      subtitle="Choose your layout design and export format for the selected quotes."
+      title="🖨️ Print & Export Quotations in Template Made"
+      subtitle="Render your quotations deterministically using your saved company templates."
       onClose={onClose}
     >
       <div className="space-y-6 max-h-[75vh] overflow-y-auto pr-1">
@@ -111,11 +117,11 @@ export function ExportDesignModal({
             <div className="flex items-center gap-2">
               <span className="text-xl">📑</span>
               <h4 className="font-bold text-sm text-indigo-950 dark:text-indigo-200">
-                Selected for Export ({selectedQuotes.length} {selectedQuotes.length === 1 ? "Quotation" : "Quotations"})
+                Selected Quotations ({selectedQuotes.length})
               </h4>
             </div>
             <span className="text-xs font-extrabold bg-indigo-600 text-white px-3 py-1 rounded-full">
-              Total: ₹{totalValue.toLocaleString("en-IN")}
+              Total Value: ₹{totalValue.toLocaleString("en-IN")}
             </span>
           </div>
 
@@ -144,15 +150,15 @@ export function ExportDesignModal({
           </div>
         </div>
 
-        {/* ── Section 2: Choose Design Layout ("Which Design?") ── */}
+        {/* ── Section 2: Choose Template Made ("Which Template?") ── */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h4 className="font-bold text-sm text-zinc-900 dark:text-white">
-                Step 2: Choose Quotation Design & Layout
+              <h4 className="font-bold text-sm text-zinc-900 dark:text-white flex items-center gap-1.5">
+                <span>📑 Select Quotation Template to Print / Export In:</span>
               </h4>
               <p className="text-xs text-zinc-500">
-                Select which layout design or custom template to apply for this export.
+                Choose from templates created in the Operon AI Template Lab. No arbitrary file uploading required.
               </p>
             </div>
             <button
@@ -161,146 +167,74 @@ export function ExportDesignModal({
                 onClose();
                 onOpenDesignStudio();
               }}
-              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800"
+              className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 bg-indigo-50 dark:bg-indigo-950/40 px-2.5 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800 cursor-pointer shadow-2xs"
             >
-              <span>⚙️</span> Upload / Manage Custom Templates →
+              <span>⚙️</span> Manage & Create Templates in Studio →
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Style 1: Modern */}
-            <div
-              onClick={() => setSelectedStyle("modern")}
-              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                selectedStyle === "modern"
-                  ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-900/30 shadow-md transform scale-[1.01]"
-                  : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 bg-white dark:bg-zinc-900"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xl">⚡</span>
-                  {selectedStyle === "modern" && (
-                    <span className="text-[10px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      Selected
-                    </span>
-                  )}
-                </div>
-                <div className="font-bold text-sm text-zinc-900 dark:text-white">
-                  Modern Clean
-                </div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
-                  Vibrant purple/blue accent header bar, clean modern typography, and structured item breakdown.
-                </p>
-              </div>
-            </div>
-
-            {/* Style 2: Classic */}
-            <div
-              onClick={() => setSelectedStyle("classic")}
-              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                selectedStyle === "classic"
-                  ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-900/30 shadow-md transform scale-[1.01]"
-                  : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 bg-white dark:bg-zinc-900"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xl">🏛️</span>
-                  {selectedStyle === "classic" && (
-                    <span className="text-[10px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      Selected
-                    </span>
-                  )}
-                </div>
-                <div className="font-bold text-sm text-zinc-900 dark:text-white">
-                  Classic Enterprise
-                </div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
-                  Formal boxed layout with shaded alternating table rows and traditional medical billing aesthetic.
-                </p>
-              </div>
-            </div>
-
-            {/* Style 3: Minimal Pro */}
-            <div
-              onClick={() => setSelectedStyle("minimal")}
-              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                selectedStyle === "minimal"
-                  ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-900/30 shadow-md transform scale-[1.01]"
-                  : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 bg-white dark:bg-zinc-900"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xl">💎</span>
-                  {selectedStyle === "minimal" && (
-                    <span className="text-[10px] font-extrabold bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      Selected
-                    </span>
-                  )}
-                </div>
-                <div className="font-bold text-sm text-zinc-900 dark:text-white">
-                  Minimal Pro
-                </div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
-                  Generous whitespace, bold black/white typography, and minimalist divider lines.
-                </p>
-              </div>
-            </div>
-
-            {/* Style 4: Custom Uploaded Design */}
-            <div
-              onClick={() => setSelectedStyle("custom_uploaded")}
-              className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
-                selectedStyle === "custom_uploaded"
-                  ? "border-green-600 bg-green-50/70 dark:bg-green-950/30 shadow-md transform scale-[1.01]"
-                  : "border-zinc-200 dark:border-zinc-700 hover:border-green-400 bg-white dark:bg-zinc-900"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xl">🖼️</span>
-                  {selectedStyle === "custom_uploaded" && (
-                    <span className="text-[10px] font-extrabold bg-green-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      Selected
-                    </span>
-                  )}
-                </div>
-                <div className="font-bold text-sm text-green-900 dark:text-green-300 flex items-center gap-1.5">
-                  <span>My Custom Uploaded Design</span>
-                </div>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">
-                  Injects into your custom uploaded Excel template (`.xlsx`) or applies your custom letterhead header/footer.
-                </p>
-
-                {/* Status indicator of what is uploaded */}
-                <div className="mt-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800 text-[11px]">
-                  {hasCustomUploads ? (
-                    <div className="space-y-1 text-green-700 dark:text-green-400 font-semibold">
-                      {brand.customExcelTemplate && (
-                        <div>✓ Excel Template: {brand.customExcelTemplateName || "Uploaded"}</div>
-                      )}
-                      {brand.customHeaderImage && <div>✓ Custom Header Banner Uploaded</div>}
-                      {brand.customFooterImage && <div>✓ Custom Footer / Stamp Uploaded</div>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[280px] overflow-y-auto p-1">
+            {templates.map((tpl) => {
+              const isSelected = tpl.id === selectedTemplateId;
+              const primary = tpl.config.primaryColor || "#7052d7";
+              return (
+                <div
+                  key={tpl.id}
+                  onClick={() => setSelectedTemplateId(tpl.id)}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                    isSelected
+                      ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-900/30 shadow-md transform scale-[1.01]"
+                      : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 bg-white dark:bg-zinc-900"
+                  }`}
+                  style={{ borderColor: isSelected ? primary : undefined }}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="w-5 h-5 rounded-md flex items-center justify-center text-white text-[11px] font-bold"
+                          style={{ background: primary }}
+                        >
+                          {tpl.name.charAt(0)}
+                        </span>
+                        <span className="font-bold text-sm text-zinc-900 dark:text-white truncate max-w-[170px]">
+                          {tpl.name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {tpl.isDefault && (
+                          <span
+                            className="text-[9px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider text-white"
+                            style={{ background: primary }}
+                          >
+                            Default
+                          </span>
+                        )}
+                        {isSelected && (
+                          <span className="text-xs text-green-600 font-extrabold">✓</span>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="text-amber-600 dark:text-amber-400 font-medium">
-                      ⚠️ No custom template uploaded yet. Click &apos;Upload / Manage Custom Templates&apos; above!
-                    </div>
-                  )}
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-2">
+                      {tpl.description || `Theme: ${tpl.theme.toUpperCase()} · Font: ${tpl.config.font}`}
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-zinc-100 dark:border-zinc-800 text-[10px] text-zinc-400 flex justify-between items-center">
+                    <span>Style: <strong className="text-zinc-600 dark:text-zinc-300 uppercase">{tpl.theme}</strong></span>
+                    <span>Columns: {Object.values(tpl.config.columns).filter(Boolean).length} Active</span>
+                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
 
         {/* ── Section 3: Action Buttons ── */}
-        <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row gap-3 justify-end">
+        <div className="pt-4 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row gap-3 justify-end items-center">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="px-5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 text-xs font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             Cancel
           </button>
@@ -308,21 +242,21 @@ export function ExportDesignModal({
           <button
             type="button"
             disabled={isExporting}
-            onClick={() => handleExport("pdf")}
-            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white text-xs font-extrabold shadow-lg shadow-red-500/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 disabled:opacity-50"
+            onClick={handlePrintOrPdf}
+            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-extrabold shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 cursor-pointer"
           >
-            <span>📄</span>
-            <span>{isExporting ? "Generating..." : `Download as PDF (${selectedQuotes.length})`}</span>
+            <span className="text-base">🖨️</span>
+            <span>{isExporting ? "Rendering..." : `Print in Template Made (${selectedQuotes.length})`}</span>
           </button>
 
           <button
             type="button"
             disabled={isExporting}
-            onClick={() => handleExport("excel")}
-            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white text-xs font-extrabold shadow-lg shadow-green-500/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 disabled:opacity-50"
+            onClick={handleExcelExport}
+            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white text-xs font-extrabold shadow-lg shadow-green-500/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 cursor-pointer"
           >
-            <span>📊</span>
-            <span>{isExporting ? "Generating..." : `Download as Excel (${selectedQuotes.length})`}</span>
+            <span className="text-base">📊</span>
+            <span>{isExporting ? "Generating..." : `Excel in Template Made (${selectedQuotes.length})`}</span>
           </button>
         </div>
       </div>

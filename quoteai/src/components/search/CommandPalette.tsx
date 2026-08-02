@@ -21,7 +21,6 @@ const QUICK_ACTIONS: {
   { type: "nav", title: "Go to Products", icon: "◈", view: "Products" },
   { type: "nav", title: "Go to Quotations", icon: "▣", view: "Quotations" },
   { type: "nav", title: "Go to Analytics", icon: "⌁", view: "Analytics" },
-  { type: "nav", title: "Go to Follow-ups", icon: "◷", view: "Follow-ups" },
 ];
 
 export function CommandPalette({ onClose, onNavigate }: CommandPaletteProps) {

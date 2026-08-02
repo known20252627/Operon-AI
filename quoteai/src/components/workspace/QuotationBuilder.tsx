@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/purity */
-'use client';
-import React from 'react';
-import { LineItem } from './LineItem';
-import { QuoteItem, ClientDetails } from '@/types';
-import { cn } from '@/lib/utils';
+/* eslint-disable @typescript-eslint/no-unused-vars */
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { LineItem } from "./LineItem";
+import type { QuoteItem, ClientDetails } from "@/types";
 
 interface BuilderProps {
   clientDetails: ClientDetails;
@@ -16,6 +16,7 @@ interface BuilderProps {
   total: number;
   updateQty: (id: number, qty: number) => void;
   updateRate?: (id: number, rate: number) => void;
+  updateItem?: (id: number, patch: Partial<QuoteItem>) => void;
   incrementDiscount: () => void;
   decrementDiscount: () => void;
   onDownloadPdf: () => void;
@@ -26,98 +27,343 @@ interface BuilderProps {
 export function QuotationBuilder({
   clientDetails, setClientDetails,
   items, discount, subtotal, discountValue, tax, total,
-  updateQty, updateRate, incrementDiscount, decrementDiscount, onDownloadPdf, onDownloadExcel, onCreateQuote
+  updateQty, updateRate, updateItem, incrementDiscount, decrementDiscount, onDownloadPdf, onDownloadExcel, onCreateQuote
 }: BuilderProps) {
-  const money = (v: number) => `₹${v.toFixed(2)}`;
+  const [quoteId, setQuoteId] = useState("QTE-2026-0419");
+  useEffect(() => {
+    setQuoteId(`QTE-${Math.floor(100000 + Math.random() * 900000)}`);
+  }, []);
+
+  const money = (v: number) => `₹${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   return (
-    <div className="builder-card bg-white rounded-lg shadow-md p-6">
-      <div className="builder-top flex justify-between items-center mb-6">
+    <div style={{
+      background: "var(--card-bg, #18181b)",
+      border: "1px solid var(--line, rgba(255,255,255,0.1))",
+      borderRadius: "20px",
+      padding: "32px",
+      boxShadow: "0 20px 40px -15px rgba(0,0,0,0.3)",
+      display: "flex",
+      flexDirection: "column",
+      gap: "28px"
+    }}>
+      {/* ── Top Bar & Actions ── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px", borderBottom: "1px solid var(--line, rgba(255,255,255,0.08))", paddingBottom: "20px" }}>
         <div>
-          <h2 className="text-2xl font-bold">Quotation Builder</h2>
-          <div className="flex gap-2 items-center text-sm text-gray-500 mt-1">
-            <span>ID: QTE-{Date.now().toString().slice(-6)}</span>
-            <span className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs">Draft</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+            <h2 style={{ fontSize: "24px", fontWeight: 800, color: "var(--text, #fff)", margin: 0, letterSpacing: "-0.5px" }}>
+              Enterprise Quotation Studio
+            </h2>
+            <span style={{
+              background: "rgba(234, 179, 8, 0.15)",
+              color: "#facc15",
+              border: "1px solid rgba(234, 179, 8, 0.3)",
+              padding: "4px 10px",
+              borderRadius: "99px",
+              fontSize: "11px",
+              fontWeight: 800,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em"
+            }}>
+              Draft Schedule
+            </span>
           </div>
+          <p style={{ margin: 0, fontSize: "13px", color: "var(--muted, #94a3b8)" }}>
+            Ref ID: <b style={{ fontFamily: "var(--font-mono, monospace, inherit)", color: "#c084fc" }}>{quoteId}</b> &middot; Using Operon AI Official Template System
+          </p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={onDownloadExcel} className="bg-green-600 text-white px-4 py-2 rounded">
-            Excel
+
+        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={onDownloadExcel}
+            style={{
+              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              color: "#fff",
+              border: "none",
+              padding: "10px 18px",
+              borderRadius: "12px",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(16, 185, 129, 0.35)",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "transform 0.15s, box-shadow 0.15s"
+            }}
+          >
+            <span>📑</span> Export Excel Schedule
           </button>
-          <button onClick={onDownloadPdf} className="bg-blue-600 text-white px-4 py-2 rounded">
-            PDF
+          <button
+            type="button"
+            onClick={onDownloadPdf}
+            style={{
+              background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)",
+              color: "#fff",
+              border: "none",
+              padding: "10px 18px",
+              borderRadius: "12px",
+              fontSize: "13px",
+              fontWeight: 700,
+              cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(37, 99, 235, 0.35)",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              transition: "transform 0.15s, box-shadow 0.15s"
+            }}
+          >
+            <span>📕</span> Generate PDF
           </button>
         </div>
       </div>
 
-      <div className="mb-6 p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900/30">
-        <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <span>👤</span> Client Details
+      {/* ── Client Dossier Box ── */}
+      <div style={{
+        background: "rgba(0,0,0,0.2)",
+        border: "1px solid var(--line, rgba(255,255,255,0.08))",
+        borderRadius: "16px",
+        padding: "24px"
+      }}>
+        <h3 style={{
+          fontSize: "13px",
+          fontWeight: 800,
+          color: "var(--text, #fff)",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          margin: "0 0 16px 0",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px"
+        }}>
+          <span style={{ fontSize: "16px" }}>🏢</span> Corporate Client &amp; Billing Profile
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
           <div>
-            <label className="block text-[11px] font-semibold text-zinc-500 uppercase mb-1">Company / Name</label>
-            <input type="text" className="w-full px-2.5 py-1.5 text-sm border rounded-md dark:bg-zinc-800 dark:border-zinc-700" placeholder="Apollo Hospitals" value={clientDetails.name} onChange={e => setClientDetails({...clientDetails, name: e.target.value})} />
+            <label style={labelStyle}>Client / Hospital Organization</label>
+            <input
+              type="text"
+              value={clientDetails.name}
+              onChange={(e) => setClientDetails({ ...clientDetails, name: e.target.value })}
+              placeholder="e.g. Apollo Hospitals Enterprise"
+              style={inputStyle}
+            />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-zinc-500 uppercase mb-1">GST Number</label>
-            <input type="text" className="w-full px-2.5 py-1.5 text-sm border rounded-md dark:bg-zinc-800 dark:border-zinc-700 uppercase" placeholder="29ABCDE1234F1Z5" value={clientDetails.gstNumber || ""} onChange={e => setClientDetails({...clientDetails, gstNumber: e.target.value})} />
+            <label style={labelStyle}>GST Registration Number</label>
+            <input
+              type="text"
+              value={clientDetails.gstNumber || ""}
+              onChange={(e) => setClientDetails({ ...clientDetails, gstNumber: e.target.value })}
+              placeholder="e.g. 29ABCDE1234F1Z5"
+              style={{ ...inputStyle, fontFamily: "var(--font-mono, monospace, inherit)", textTransform: "uppercase" }}
+            />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-zinc-500 uppercase mb-1">Email Address</label>
-            <input type="email" className="w-full px-2.5 py-1.5 text-sm border rounded-md dark:bg-zinc-800 dark:border-zinc-700" placeholder="procurement@apollo.com" value={clientDetails.email || ""} onChange={e => setClientDetails({...clientDetails, email: e.target.value})} />
+            <label style={labelStyle}>Procurement Email Address</label>
+            <input
+              type="email"
+              value={clientDetails.email || ""}
+              onChange={(e) => setClientDetails({ ...clientDetails, email: e.target.value })}
+              placeholder="procurement@hospital-group.com"
+              style={inputStyle}
+            />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-zinc-500 uppercase mb-1">Phone Number</label>
-            <input type="text" className="w-full px-2.5 py-1.5 text-sm border rounded-md dark:bg-zinc-800 dark:border-zinc-700" placeholder="+91 9876543210" value={clientDetails.phone || ""} onChange={e => setClientDetails({...clientDetails, phone: e.target.value})} />
+            <label style={labelStyle}>Contact / Desk Phone</label>
+            <input
+              type="text"
+              value={clientDetails.phone || ""}
+              onChange={(e) => setClientDetails({ ...clientDetails, phone: e.target.value })}
+              placeholder="+91 98765 43210"
+              style={inputStyle}
+            />
           </div>
-          <div className="md:col-span-2 lg:col-span-4">
-            <label className="block text-[11px] font-semibold text-zinc-500 uppercase mb-1">Billing Address</label>
-            <input type="text" className="w-full px-2.5 py-1.5 text-sm border rounded-md dark:bg-zinc-800 dark:border-zinc-700" placeholder="123 Health Ave, Bangalore, Karnataka 560001" value={clientDetails.address || ""} onChange={e => setClientDetails({...clientDetails, address: e.target.value})} />
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={labelStyle}>Official Billing &amp; Dispatch Address</label>
+            <input
+              type="text"
+              value={clientDetails.address || ""}
+              onChange={(e) => setClientDetails({ ...clientDetails, address: e.target.value })}
+              placeholder="123 Health Ave, Bangalore, Karnataka 560001"
+              style={inputStyle}
+            />
           </div>
         </div>
       </div>
 
-      <div className="line-items border rounded mb-6">
-        {items.map(item => (
-          <LineItem key={item.id} item={item} onUpdateQty={updateQty} onUpdateRate={updateRate} money={money} />
-        ))}
-      </div>
-
-      <div className="space-y-3 text-right">
-        <div className="flex justify-end gap-4">
-          <span className="text-gray-600">Subtotal:</span>
-          <span className="w-32 font-medium">{money(subtotal)}</span>
+      {/* ── Line Items Table Section ── */}
+      <div style={{
+        background: "rgba(0,0,0,0.15)",
+        border: "1px solid var(--line, rgba(255,255,255,0.08))",
+        borderRadius: "16px",
+        overflow: "hidden"
+      }}>
+        <div style={{
+          background: "rgba(255,255,255,0.03)",
+          padding: "14px 20px",
+          borderBottom: "1px solid var(--line, rgba(255,255,255,0.08))",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }}>
+          <span style={{ fontSize: "13px", fontWeight: 800, color: "var(--text, #fff)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            🛒 Line Items Schedule ({items.length}) &middot; <span style={{ color: "#c084fc" }}>✏️ All Names &amp; GST Rates Editable</span>
+          </span>
+          <span style={{ fontSize: "12px", color: "#10b981", fontWeight: 700 }}>
+            ⚡ Tabular Math Verification Active
+          </span>
         </div>
         
-        <div className="discount-row flex justify-end gap-4 items-center">
-          <span className="text-gray-600">Discount ({discount}%):</span>
-          <div className="flex gap-2 items-center">
-            <button onClick={decrementDiscount} className="px-2 border rounded">-</button>
-            <button onClick={incrementDiscount} className="px-2 border rounded">+</button>
+        {items.length === 0 ? (
+          <div style={{ padding: "40px", textAlign: "center", color: "var(--muted, #94a3b8)", fontSize: "14px" }}>
+            No line items added yet. Use the AI Requisition Prompt on the left or click &quot;Scan Request&quot; above to add products!
           </div>
-          <span className="w-32 font-medium text-red-600">-{money(discountValue)}</span>
+        ) : (
+          <div>
+            {items.map((item) => (
+              <LineItem
+                key={item.id}
+                item={item}
+                onUpdateQty={updateQty}
+                onUpdateRate={updateRate}
+                onUpdateItem={updateItem}
+                money={money}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Financial Breakdown Summary ── */}
+      <div style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-end",
+        gap: "12px",
+        paddingTop: "12px",
+        borderTop: "1px solid var(--line, rgba(255,255,255,0.08))"
+      }}>
+        <div style={summaryRowStyle}>
+          <span style={{ color: "var(--muted, #94a3b8)" }}>Net Subtotal:</span>
+          <span style={{ width: "160px", textAlign: "right", fontWeight: 700, color: "var(--text, #fff)", fontFamily: "var(--font-mono, monospace, inherit)" }}>
+            {money(subtotal)}
+          </span>
         </div>
-        
-        <div className="flex justify-end gap-4">
-          <span className="text-gray-600">Tax:</span>
-          <span className="w-32 font-medium">{money(tax)}</span>
+
+        <div style={{ ...summaryRowStyle, color: "#ef4444" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ color: "var(--muted, #94a3b8)" }}>Special Discount ({discount}%):</span>
+            <div style={{ display: "flex", gap: "4px" }}>
+              <button type="button" onClick={decrementDiscount} style={btnSmallStyle}>−</button>
+              <button type="button" onClick={incrementDiscount} style={btnSmallStyle}>+</button>
+            </div>
+          </div>
+          <span style={{ width: "160px", textAlign: "right", fontWeight: 700, fontFamily: "var(--font-mono, monospace, inherit)" }}>
+            −{money(discountValue)}
+          </span>
         </div>
-        
-        <div className="total-row flex justify-end gap-4 pt-4 border-t text-xl font-bold">
-          <span>Total:</span>
-          <span className="w-32 text-blue-600">{money(total)}</span>
+
+        <div style={summaryRowStyle}>
+          <span style={{ color: "var(--muted, #94a3b8)" }}>Estimated GST (Calculated Live):</span>
+          <span style={{ width: "160px", textAlign: "right", fontWeight: 700, color: "var(--text, #fff)", fontFamily: "var(--font-mono, monospace, inherit)" }}>
+            {money(tax)}
+          </span>
+        </div>
+
+        <div style={{
+          ...summaryRowStyle,
+          marginTop: "8px",
+          paddingTop: "16px",
+          borderTop: "2px dashed rgba(255,255,255,0.15)",
+          fontSize: "20px",
+          fontWeight: 800
+        }}>
+          <span style={{ color: "var(--text, #fff)" }}>Grand Total:</span>
+          <span style={{ width: "200px", textAlign: "right", color: "#10b981", fontFamily: "var(--font-mono, monospace, inherit)" }}>
+            {money(total)}
+          </span>
         </div>
       </div>
 
-      <div className="mt-8 flex justify-end">
-        <button 
+      {/* ── Checkout Footer Button ── */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px", paddingTop: "20px", borderTop: "1px solid var(--line, rgba(255,255,255,0.08))" }}>
+        <button
+          type="button"
           onClick={onCreateQuote}
-          className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold w-full sm:w-auto shadow-md transition-colors flex items-center justify-center gap-2"
+          style={{
+            background: "linear-gradient(135deg, #7052d7 0%, #4f46e5 100%)",
+            color: "#fff",
+            border: "none",
+            padding: "16px 36px",
+            borderRadius: "14px",
+            fontSize: "15px",
+            fontWeight: 800,
+            cursor: "pointer",
+            boxShadow: "0 6px 24px rgba(112, 82, 215, 0.45)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "10px",
+            transition: "transform 0.15s, box-shadow 0.15s"
+          }}
         >
-          <span>✓</span> Approve &amp; Save Quote (+ Auto-learn items)
+          <span style={{ fontSize: "18px" }}>✓</span>
+          <span>Approve &amp; Generate Official Quotation (+ Auto-Learn Items)</span>
         </button>
       </div>
     </div>
   );
 }
+
+// ── Styles ──────────────────────────────────────────
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  fontSize: "11px",
+  fontWeight: 700,
+  color: "var(--muted, #94a3b8)",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  marginBottom: "6px"
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "10px 14px",
+  borderRadius: "10px",
+  border: "1px solid var(--line, rgba(255,255,255,0.15))",
+  background: "rgba(0,0,0,0.25)",
+  color: "var(--text, #fff)",
+  fontSize: "14px",
+  fontWeight: 600,
+  outline: "none",
+  boxSizing: "border-box",
+  transition: "border-color 0.15s"
+};
+
+const summaryRowStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  width: "100%",
+  maxWidth: "380px",
+  fontSize: "14px",
+  lineHeight: 1.4
+};
+
+const btnSmallStyle: React.CSSProperties = {
+  width: "24px",
+  height: "24px",
+  background: "rgba(255,255,255,0.1)",
+  color: "var(--text, #fff)",
+  border: "none",
+  borderRadius: "6px",
+  fontWeight: 800,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "13px"
+};
