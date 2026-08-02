@@ -89,7 +89,7 @@ pnpm install
 ```
 
 ### 3. Configure Environment Variables
-Create a `.env.local` file in the project root directory and add your Groq Neural API key (or rely on the automated production fallback already embedded within the serverless route architecture):
+Create a `.env.local` file inside the `quoteai/` project root directory and add your Groq Neural API key (or rely on the automated production fallback already embedded within the serverless route architecture):
 ```env
 GROQ_API_KEY=your_groq_api_key_here
 NEXT_PUBLIC_GROQ_API_KEY=your_groq_api_key_here
@@ -106,29 +106,31 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser to exper
 ## 📂 Codebase Structure & Sitemap
 
 ```
-quoteai/
-├── src/
-│   ├── app/                  # Next.js App Router root & backend API Endpoints
-│   │   ├── api/              # Serverless AI route handlers (Marketing & Template OCR)
-│   │   ├── templates/        # Dedicated Template Studio route
-│   │   ├── globals.css       # Core Enterprise Design Token system & scroll geometry
-│   │   └── page.tsx          # Master dashboard orchestrator & workspace router
-│   ├── components/
-│   │   ├── analytics/        # Real-time revenue intelligence & approved contract ledgers
-│   │   ├── dashboard/        # Executive landing KPIs, Hero Banner, & AI Telemetry
-│   │   ├── marketing/        # Corporate B2B automated communications studio
-│   │   ├── ocr/              # 2-Stage Neural document extraction & analysis hub
-│   │   ├── quotation/        # Quotation tables, filtering schedules, & export designers
-│   │   ├── templates/        # Visual Canva-like custom proforma builder studio
-│   │   └── workspace/        # Interactive Quotation Builder modal & reactive line items
-│   ├── hooks/                # Reactive custom hooks (useQuotation, useTheme, useToast)
-│   ├── lib/                  # Engine utilities, constants, ExcelJS & jsPDF builders
-│   ├── services/             # Client-side storage layer, brand syncing, & OCR integration
-│   └── types/                # Strict TypeScript interfaces and enterprise domain models
-├── public/                   # Static branding assets, icons, and favicons
-├── next.config.ts            # Next.js cloud compilation and build tolerance settings
-├── tsconfig.json             # TypeScript compiler rules and module resolution overrides
-└── package.json              # Project dependency manifest and scripts
+Operon-AI/
+├── README.md                 # Master repository & executive capability documentation
+└── quoteai/                  # Primary Next.js Enterprise Application Workspace
+    ├── src/
+    │   ├── app/              # Next.js App Router root & backend API Endpoints
+    │   │   ├── api/          # Serverless AI route handlers (Marketing & Template OCR)
+    │   │   ├── templates/    # Dedicated Template Studio route
+    │   │   ├── globals.css   # Core Enterprise Design Token system & scroll geometry
+    │   │   └── page.tsx      # Master dashboard orchestrator & workspace router
+    │   ├── components/
+    │   │   ├── analytics/    # Real-time revenue intelligence & approved contract ledgers
+    │   │   ├── dashboard/    # Executive landing KPIs, Hero Banner, & AI Telemetry
+    │   │   ├── marketing/    # Corporate B2B automated communications studio
+    │   │   ├── ocr/          # 2-Stage Neural document extraction & analysis hub
+    │   │   ├── quotation/    # Quotation tables, filtering schedules, & export designers
+    │   │   ├── templates/    # Visual Canva-like custom proforma builder studio
+    │   │   └── workspace/    # Interactive Quotation Builder modal & reactive line items
+    │   ├── hooks/            # Reactive custom hooks (useQuotation, useTheme, useToast)
+    │   ├── lib/              # Engine utilities, constants, ExcelJS & jsPDF builders
+    │   ├── services/         # Client-side storage layer, brand syncing, & OCR integration
+    │   └── types/            # Strict TypeScript interfaces and enterprise domain models
+    ├── public/               # Static branding assets, icons, and favicons
+    ├── next.config.ts        # Next.js cloud compilation and build tolerance settings
+    ├── tsconfig.json         # TypeScript compiler rules and module resolution overrides
+    └── package.json          # Project dependency manifest and scripts
 ```
 
 ---
