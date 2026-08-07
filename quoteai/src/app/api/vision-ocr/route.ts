@@ -40,7 +40,7 @@ export async function POST(req: Request) {
             content: [
               {
                 type: "text",
-                text: "Extract all tabular data, line items, prices, and quantities from this document as plain structured text. Do not summarize, just extract the precise data."
+                text: "Extract all tabular data, line items, prices, and quantities from this document exactly as they physically appear. STRICT INSTRUCTION: DO NOT invent, hallucinate, or assume any products, names, or values. Only extract text that is physically visible in the document. If text is unreadable or uncertain, output '[UNCLEAR]' instead of guessing. Keep the items in the exact same order as they appear."
               },
               {
                 type: "image_url",

@@ -84,31 +84,37 @@ Your assignment in Stage 2 is automatic AI Noise Elimination & Product Entity Is
 1. FILTER OUT all irrelevant document noise: bank accounts, IFSC/SWIFT codes, office addresses, phone numbers, legal disclaimers, GSTIN registration strings, payment terms, footers, timestamps, and watermarks.
 2. ISOLATE STRICTLY the important business entities: the customer organization, document date, order/reference code, and EVERY SINGLE product line item requested or invoiced.
 
-Here is our live company product inventory catalog for semantic binding:
+STRICT INSTRUCTION: DO NOT invent, hallucinate, or assume any products, names, or values. Only extract text that is physically visible in the document.
+If a word is unreadable or uncertain, return "[UNCLEAR]" instead of guessing.
+
+Here is our live company product inventory catalog for semantic binding (use ONLY for matching if you are highly confident, otherwise return exact OCR text):
 ${catalogSummary}
 
 You MUST return a JSON object with EXACTLY this schema:
 {
   "docType": "Purchase Order" | "Tender Document" | "Vendor Invoice" | "WhatsApp Inquiry" | "Handwritten Note" | "Inventory Spreadsheet",
-  "customerName": "string (name of person or ordering department, e.g. Procurement Dept or Dr. Mehta)",
-  "customerCompany": "string (name of client organization or hospital, e.g. Apollo Hospitals)",
-  "referenceNumber": "string (e.g. PO-2026-8891 or OP-4921)",
-  "documentDate": "string (date found or current date in DD/MM/YYYY)",
-  "aiNotes": "string (2 sentence professional summary detailing how AI eliminated non-essential noise and verified the product line items)",
+  "customerName": "string",
+  "customerCompany": "string",
+  "referenceNumber": "string",
+  "documentDate": "string (DD/MM/YYYY)",
+  "aiNotes": "string",
   "items": [
     {
-      "product": "string (name of product as found or matched to catalog)",
-      "qty": number (integer quantity required),
-      "rate": number (unit price / rate in INR, or best matching catalog rate if price not listed),
-      "gst": number (tax percentage, default 12),
-      "aiReason": "string (how AI isolated this item and verified its unit pricing against inventory)"
+      "product": "string (exact name found in document, or [UNCLEAR] if illegible)",
+      "qty": number,
+      "rate": number (unit price / rate in INR),
+      "gst": number,
+      "confidence": number (float between 0.0 and 1.0 indicating extraction certainty),
+      "aiReason": "string"
     }
   ]
 }
 
 Rules:
 - Capture EVERY SINGLE product/item mentioned. Do NOT let any item get missed.
-- Ignore non-item rows (like shipping fee disclaimers, bank details, or address notes).
+- Ignore non-item rows.
+- If no products are confidently detected, return an empty list for "items" instead of fabricated data.
+- Keep the products in the same order as they appear.
 - Output ONLY valid JSON in json_object format.`;
 
   try {
@@ -125,7 +131,7 @@ Rules:
       },
       body: JSON.stringify({
         model,
-        temperature: 0.1,
+        temperature: 0.0,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: systemPrompt },
@@ -148,17 +154,33 @@ Rules:
     let itemIdCounter = Date.now();
     
     const structuredItems: QuoteItem[] = (Array.isArray(data.items) ? data.items : []).map((item: any) => {
-      const match = matchProductToInventory(item.product || "General Equipment", Number(item.rate) || undefined);
+      let finalProduct = item.product || "[UNCLEAR]";
+      let finalRate = Number(item.rate) || 0;
+      let finalGst = Number(item.gst) || 12;
+      let conf = Number(item.confidence) || 0.5;
+      let sku = "UNKNOWN-SKU";
+
+      // Only apply semantic catalog matching if confidence is high and it's not unclear
+      if (conf >= 0.9 && finalProduct !== "[UNCLEAR]") {
+        const match = matchProductToInventory(finalProduct, finalRate > 0 ? finalRate : undefined);
+        if (match.confidence >= 90) {
+          finalProduct = match.product.name;
+          finalRate = finalRate > 0 ? finalRate : match.product.rate;
+          finalGst = match.product.gst || 12;
+          sku = match.product.sku;
+        }
+      }
+
       return {
         id: itemIdCounter++,
-        product: match.confidence >= 80 ? match.product.name : (item.product || match.product.name),
-        sku: match.product.sku,
+        product: finalProduct,
+        sku,
         qty: Math.max(1, Number(item.qty) || 1),
-        rate: Number(item.rate) || match.product.rate || 1500,
-        gst: Number(item.gst) || match.product.gst || 12,
-        confidence: 99,
-        aiReason: `✨ Operon AI Filter: ${item.aiReason || match.reason}`,
-        matchedFrom: (item.product || match.product.name).slice(0, 50)
+        rate: finalRate,
+        gst: finalGst,
+        confidence: Math.round(conf * 100),
+        aiReason: `✨ Operon AI Filter: ${item.aiReason || "Extracted directly from OCR"}`,
+        matchedFrom: finalProduct.slice(0, 50)
       };
     });
 
@@ -694,22 +716,9 @@ export function parseOcrTextToStructuredResult(rawText: string, filename = "Scan
     }
   }
 
-  if (extractedItems.length === 0) {
-    const defaultMatch = matchProductToInventory(text);
-    extractedItems.push({
-      id: itemIdCounter++,
-      product: defaultMatch.product.name,
-      sku: defaultMatch.product.sku,
-      qty: 10,
-      rate: defaultMatch.product.rate,
-      gst: defaultMatch.product.gst,
-      confidence: 86,
-      aiReason: `✨ Operon AI Filter: Semantic inventory deduction from complete document profile`,
-      matchedFrom: filename
-    });
-  }
-
-  const avgConf = Math.round(extractedItems.reduce((acc, i) => acc + (i.confidence || 85), 0) / extractedItems.length);
+  const avgConf = extractedItems.length > 0 
+    ? Math.round(extractedItems.reduce((acc, i) => acc + (i.confidence || 85), 0) / extractedItems.length)
+    : 0;
   const status: OCRDocumentResult["status"] = avgConf >= 90 ? "verified" : (avgConf >= 75 ? "needs-review" : "low-confidence");
 
   let aiNotes = `✨ Operon AI 2-Stage Engine analyzed '${filename}' in ${Date.now() - startTime + 240}ms. Stage 2 AI Filter automatically eliminated ${linesFilteredOut} non-essential noise lines (bank accounts, addresses, legal terms) and strictly isolated the ${extractedItems.length} important product items. `;
@@ -828,20 +837,13 @@ export async function executeRealOcrOnUploadedFile(
       }
 
       if (onProgress) onProgress(88, "Step 2/2: ✨ Operon AI Filter removing bank account numbers, legal disclaimers & isolating product items...");
-      const result = parseOcrTextToStructuredResult(text || `Uploaded Image: ${file.name}\n10 units Digital Blood Pressure Monitor Rate 1850`, file.name, "image");
+      const result = parseOcrTextToStructuredResult(text || `Uploaded Image: ${file.name}`, file.name, "image");
       if (onProgress) onProgress(100, "✨ Extraction & noise elimination complete!");
       return result;
-    } catch (ocrErr) {
-      console.warn("Qwen2.5-VL OCR fallback triggered:", ocrErr);
-      if (onProgress) onProgress(80, "Step 2/2: ✨ Applying AI Vision semantic fallback extraction...");
-      const fallbackText = `TAX INVOICE / PURCHASE ORDER - ${file.name.toUpperCase()}
-Date: ${new Date().toLocaleDateString("en-IN")} | Bank IFSC: HDFC000124 | Legal Disclaimer: No return after 7 days
-Client: Apollo Medical Centers
-1. Digital Blood Pressure Monitor (Omron) - Qty: 15 Units - Rate: INR 1,850.00
-2. Pulse Oximeter Pro (BPL Medical) - Qty: 10 Units - Rate: INR 1,240.00
-3. Stethoscope Classic III - Qty: 5 Units - Rate: INR 6,800.00
-4. Infusion Pump Modular System IP-800 - Qty: 2 Units - Rate: INR 42,500.00`;
-      return parseOcrTextToStructuredResult(fallbackText, file.name, "image");
+    } catch (ocrErr: any) {
+      console.warn("Qwen2.5-VL OCR failed:", ocrErr);
+      if (onProgress) onProgress(100, "❌ Extraction failed due to OCR error.");
+      throw new Error("OCR extraction failed: " + ocrErr.message);
     }
   }
 
