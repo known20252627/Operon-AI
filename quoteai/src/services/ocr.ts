@@ -791,10 +791,10 @@ export async function executeRealOcrOnUploadedFile(
     });
   }
 
-  // 2. Image OCR (.jpg, .jpeg, .png, .webp) via Microsoft Florence-2 (Serverless API)
+  // 2. Image OCR (.jpg, .jpeg, .png, .webp) via OpenRouter (Qwen2.5-VL-72B Serverless API)
   if (name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".webp") || file.type.startsWith("image/")) {
     try {
-      if (onProgress) onProgress(20, "Step 1/2: Preparing image for Microsoft Florence-2 Vision AI...");
+      if (onProgress) onProgress(20, "Step 1/2: Preparing image for Qwen2.5-VL Vision AI...");
       
       const base64Image = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -803,23 +803,23 @@ export async function executeRealOcrOnUploadedFile(
         reader.readAsDataURL(file);
       });
       
-      if (onProgress) onProgress(45, "Step 1/2: Running OCR extraction via Microsoft Florence-2 (Cloud Inference)...");
+      if (onProgress) onProgress(45, "Step 1/2: Running OCR extraction via Qwen2.5-VL-72B (Cloud Inference)...");
       
-      const florenceRes = await fetch("/api/florence-ocr", {
+      const visionRes = await fetch("/api/vision-ocr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageBase64: base64Image })
       });
 
-      if (!florenceRes.ok) {
-        throw new Error(`Florence-2 API returned status ${florenceRes.status}`);
+      if (!visionRes.ok) {
+        throw new Error(`OpenRouter Vision API returned status ${visionRes.status}`);
       }
 
-      const { text } = await florenceRes.json();
+      const { text } = await visionRes.json();
 
       // ✨ Stage 2: Try Cloud Neural AI Noise Removal
       if (getAIApiKey() && text && text.trim().length > 10) {
-        if (onProgress) onProgress(82, "Step 2/2: ✨ Operon AI Neural Engine analyzing Florence output — eliminating noise & isolating items...");
+        if (onProgress) onProgress(82, "Step 2/2: ✨ Operon AI Neural Engine analyzing Qwen Vision output — eliminating noise & isolating items...");
         const aiRes = await extractWithNeuralAI(text, file.name, "image");
         if (aiRes) {
           if (onProgress) onProgress(100, "✨ Operon AI verified product extraction complete!");
@@ -832,7 +832,7 @@ export async function executeRealOcrOnUploadedFile(
       if (onProgress) onProgress(100, "✨ Extraction & noise elimination complete!");
       return result;
     } catch (ocrErr) {
-      console.warn("Florence-2 OCR fallback triggered:", ocrErr);
+      console.warn("Qwen2.5-VL OCR fallback triggered:", ocrErr);
       if (onProgress) onProgress(80, "Step 2/2: ✨ Applying AI Vision semantic fallback extraction...");
       const fallbackText = `TAX INVOICE / PURCHASE ORDER - ${file.name.toUpperCase()}
 Date: ${new Date().toLocaleDateString("en-IN")} | Bank IFSC: HDFC000124 | Legal Disclaimer: No return after 7 days
