@@ -791,27 +791,35 @@ export async function executeRealOcrOnUploadedFile(
     });
   }
 
-  // 2. Image OCR (.jpg, .jpeg, .png, .webp) via Preprocessed Tesseract.js
+  // 2. Image OCR (.jpg, .jpeg, .png, .webp) via Microsoft Florence-2 (Serverless API)
   if (name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".webp") || file.type.startsWith("image/")) {
     try {
-      if (onProgress) onProgress(20, "Step 1/2: Applying neural Canvas binarization & contrast normalization...");
-      const preprocessedBlob = await preprocessImageForOCR(file);
+      if (onProgress) onProgress(20, "Step 1/2: Preparing image for Microsoft Florence-2 Vision AI...");
       
-      if (onProgress) onProgress(35, "Step 1/2: Initializing Tesseract optical character engine...");
-      const Tesseract = (await import("tesseract.js")).default;
-      
-      if (onProgress) onProgress(50, "Step 1/2: Running optical character recognition on document scan...");
-      const { data: { text } } = await Tesseract.recognize(preprocessedBlob, "eng", {
-        logger: (m: any) => {
-          if (m.status === "recognizing text" && onProgress) {
-            onProgress(45 + Math.round(m.progress * 30), `Step 1/2: Optical Character Scanning (${Math.round(m.progress * 100)}%)...`);
-          }
-        }
+      const base64Image = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = () => reject(new Error("Failed to read image file"));
+        reader.readAsDataURL(file);
       });
+      
+      if (onProgress) onProgress(45, "Step 1/2: Running OCR extraction via Microsoft Florence-2 (Cloud Inference)...");
+      
+      const florenceRes = await fetch("/api/florence-ocr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64Image })
+      });
+
+      if (!florenceRes.ok) {
+        throw new Error(`Florence-2 API returned status ${florenceRes.status}`);
+      }
+
+      const { text } = await florenceRes.json();
 
       // ✨ Stage 2: Try Cloud Neural AI Noise Removal
       if (getAIApiKey() && text && text.trim().length > 10) {
-        if (onProgress) onProgress(82, "Step 2/2: ✨ Operon AI Neural Engine analyzing text — eliminating addresses & bank noise, isolating product items...");
+        if (onProgress) onProgress(82, "Step 2/2: ✨ Operon AI Neural Engine analyzing Florence output — eliminating noise & isolating items...");
         const aiRes = await extractWithNeuralAI(text, file.name, "image");
         if (aiRes) {
           if (onProgress) onProgress(100, "✨ Operon AI verified product extraction complete!");
@@ -824,7 +832,7 @@ export async function executeRealOcrOnUploadedFile(
       if (onProgress) onProgress(100, "✨ Extraction & noise elimination complete!");
       return result;
     } catch (ocrErr) {
-      console.warn("Tesseract OCR fallback triggered:", ocrErr);
+      console.warn("Florence-2 OCR fallback triggered:", ocrErr);
       if (onProgress) onProgress(80, "Step 2/2: ✨ Applying AI Vision semantic fallback extraction...");
       const fallbackText = `TAX INVOICE / PURCHASE ORDER - ${file.name.toUpperCase()}
 Date: ${new Date().toLocaleDateString("en-IN")} | Bank IFSC: HDFC000124 | Legal Disclaimer: No return after 7 days
